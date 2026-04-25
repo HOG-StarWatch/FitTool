@@ -249,7 +249,8 @@ function updateTiandituKeyVisibility(sourceType) {
 
 function getTiandituKey() {
   const input = document.getElementById('tiandituKeyInput');
-  return input ? input.value.trim() : DEFAULT_TIANDITU_KEY;
+  const val = input ? input.value.trim() : '';
+  return val || DEFAULT_TIANDITU_KEY;
 }
 
 const mapSources = {
@@ -263,9 +264,9 @@ const mapSources = {
   wikimedia: L.tileLayer("https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}.png", { subdomains: ['a', 'b', 'c'], maxZoom: 19, attribution: '&copy; Wikimedia' }),
   osm: L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { subdomains: ['a', 'b', 'c'], maxZoom: 19, attribution: '&copy; OpenStreetMap' }),
   esri_satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Tiles &copy; Esri' }),
-  tianditu_vec: L.tileLayer('https://t{s}.tianditu.gov.cn/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&tk=fc97d01c0e3e98289295da844e1f2dad', { subdomains: ['0', '1', '2', '3', '4', '5', '6', '7'], minZoom: 5, maxZoom: 20, maxNativeZoom: 18, attribution: '&copy; 天地图' }),
-  tianditu_cva: L.tileLayer('https://t{s}.tianditu.gov.cn/cva_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=cva&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&tk=fc97d01c0e3e98289295da844e1f2dad', { subdomains: ['0', '1', '2', '3', '4', '5', '6', '7'], minZoom: 5, maxZoom: 20, maxNativeZoom: 17 }),
-  tianditu_img: L.tileLayer('https://t{s}.tianditu.gov.cn/img_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=img&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&tk=fc97d01c0e3e98289295da844e1f2dad', { subdomains: ['0', '1', '2', '3', '4', '5', '6', '7'], minZoom: 5, maxZoom: 20, maxNativeZoom: 18, attribution: '&copy; 天地图' }),
+  tianditu_vec: L.tileLayer('https://t{s}.tianditu.gov.cn/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&tk=' + DEFAULT_TIANDITU_KEY, { subdomains: ['0', '1', '2', '3', '4', '5', '6', '7'], minZoom: 5, maxZoom: 20, maxNativeZoom: 18, attribution: '&copy; 天地图' }),
+  tianditu_cva: L.tileLayer('https://t{s}.tianditu.gov.cn/cva_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=cva&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&tk=' + DEFAULT_TIANDITU_KEY, { subdomains: ['0', '1', '2', '3', '4', '5', '6', '7'], minZoom: 5, maxZoom: 20, maxNativeZoom: 17 }),
+  tianditu_img: L.tileLayer('https://t{s}.tianditu.gov.cn/img_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=img&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&tk=' + DEFAULT_TIANDITU_KEY, { subdomains: ['0', '1', '2', '3', '4', '5', '6', '7'], minZoom: 5, maxZoom: 20, maxNativeZoom: 18, attribution: '&copy; 天地图' }),
   gaode_vec: L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', { subdomains: ['1', '2', '3', '4'], maxZoom: 19, attribution: '&copy; 高德地图' }),
   gaode_img: L.tileLayer('https://webst0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=6&x={x}&y={y}&z={z}', { subdomains: ['1', '2', '3', '4'], maxZoom: 18, attribution: '&copy; 高德地图' }),
   gaode_rel: L.tileLayer('https://webst0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=10&x={x}&y={y}&z={z}', { subdomains: ['1', '2', '3', '4'], maxZoom: 16, attribution: '&copy; 高德地图' }),
@@ -274,8 +275,8 @@ const mapSources = {
   baidu_vec: L.tileLayer('https://maponline.bdimg.com/tile/?qt=tile&x={x}&y={y}&z={z}&styles=pl&scaler=1', { maxZoom: 19, attribution: '&copy; 百度地图' }),
   baidu_img: L.tileLayer('https://maponline.bdimg.com/tile/?qt=tile&x={x}&y={y}&z={z}&styles=sl&scaler=1', { maxZoom: 19, attribution: '&copy; 百度地图' }),
   osm_cn: L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { subdomains: ['a', 'b', 'c'], maxZoom: 19, attribution: '&copy; OpenStreetMap' }),
-  stamen_water: L.tileLayer('https://stamen-tiles.a.ssl.fastly.net/watercolor/{z}/{x}/{y}.jpg', { subdomains: ['a', 'b', 'c', 'd'], maxZoom: 18, attribution: '&copy; Stamen' }),
-  stamen_terrain: L.tileLayer('https://stamen-tiles.a.ssl.fastly.net/terrain/{z}/{x}/{y}.png', { subdomains: ['a', 'b', 'c', 'd'], maxZoom: 18, attribution: '&copy; Stamen' })
+  stamen_water: L.tileLayer('https://tiles.stadiamaps.com/tiles/stamen_watercolor/{z}/{x}/{y}.jpg', { subdomains: ['a', 'b', 'c', 'd'], maxZoom: 18, attribution: '&copy; Stamen/Stadia' }),
+  stamen_terrain: L.tileLayer('https://tiles.stadiamaps.com/tiles/stamen_terrain/{z}/{x}/{y}.png', { subdomains: ['a', 'b', 'c', 'd'], maxZoom: 18, attribution: '&copy; Stamen/Stadia' })
 };
 
 let activeBaseLayer = null;
@@ -1048,14 +1049,32 @@ function updateSavedRoutesList() {
   }
   
   container.style.border = 'none';
-  container.innerHTML = routeNames.map(name => {
+  container.innerHTML = '';
+
+  for (const name of routeNames) {
     const date = new Date(routes[name].savedAt).toLocaleDateString();
-    return `<div class="saved-route-item">
-      <span class="route-name" onclick="loadRoute('${name}')">${name}</span>
-      <span class="route-date">${date}</span>
-      <button class="route-delete-btn" onclick="deleteRoute('${name}')">删除</button>
-    </div>`;
-  }).join('');
+    const item = document.createElement('div');
+    item.className = 'saved-route-item';
+    
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'route-name';
+    nameSpan.textContent = name;
+    nameSpan.addEventListener('click', () => loadRoute(name));
+    
+    const dateSpan = document.createElement('span');
+    dateSpan.className = 'route-date';
+    dateSpan.textContent = date;
+    
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'route-delete-btn';
+    deleteBtn.textContent = '删除';
+    deleteBtn.addEventListener('click', () => deleteRoute(name));
+    
+    item.appendChild(nameSpan);
+    item.appendChild(dateSpan);
+    item.appendChild(deleteBtn);
+    container.appendChild(item);
+  }
 }
 
 document.getElementById('saveRouteBtn')?.addEventListener('click', saveRoute);
@@ -1451,9 +1470,15 @@ async function previewActivity() {
     
     previewData = data;
     previewIndex = 0;
-    
-    if (previewTimer) clearInterval(previewTimer);
-    if (previewMarker) map.removeLayer(previewMarker);
+
+    if (previewTimer) {
+      clearInterval(previewTimer);
+      previewTimer = null;
+    }
+    if (previewMarker) {
+      map.removeLayer(previewMarker);
+      previewMarker = null;
+    }
     
     const samples = previewData.samples || [];
     if (samples.length > 0) {

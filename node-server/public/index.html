@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh_CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>Keep 校园跑</title>
+  <link rel="icon" type="image/png" href="./HOG_S_64.png">
+  <link rel="shortcut icon" type="image/png" href="./HOG_S_64.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <link rel="stylesheet" href="./style.css" />
+</head>
+
+<body>
+  <div id="app">
+      <div class="sidebar">
+        <div class="sidebar-header">
+          <h1>Keep 校园跑</h1>
+          <button id="themeToggle" class="theme-toggle" title="切换主题">🌙</button>
+        </div>
+
+      <div class="card collapsible">
+        <div class="card-header" onclick="toggleCard(this)">
+          <span class="card-icon">🗺️</span>
+          <span>地图设置</span>
+          <span class="collapse-icon">▼</span>
+        </div>
+        <div class="card-body">
+          <select id="mapSourceSelect" class="styled-select">
+            <optgroup label="国内免费无鉴权">
+              <option value="gaode_vec" selected>高德地图 矢量</option>
+              <option value="gaode_img">高德地图 影像</option>
+              <option value="gaode_rel">高德地图 路网</option>
+              <option value="tencent_vec">腾讯地图 矢量</option>
+              <option value="tencent_sat">腾讯地图 影像</option>
+              <option value="baidu_vec">百度地图 矢量</option>
+              <option value="baidu_img">百度地图 影像</option>
+              <option value="osm_cn">OSM 国内节点</option>
+            </optgroup>
+            <optgroup label="国际免费无鉴权">
+              <option value="arcgis_street">ArcGIS 街道图</option>
+              <option value="arcgis_satellite">ArcGIS 卫星图</option>
+              <option value="cartodb">CartoDB 浅色</option>
+              <option value="cartodb_dark">CartoDB 深色</option>
+              <option value="osmde">OSM 德国节点</option>
+              <option value="osmfr">OSM 法国节点</option>
+              <option value="cyclOSM">CyclOSM 骑行图</option>
+              <option value="wikimedia">Wikimedia</option>
+              <option value="stamen_water">Stamen 水彩</option>
+              <option value="stamen_terrain">Stamen 地形</option>
+            </optgroup>
+            <optgroup label="需 Key">
+              <option value="tianditu">天地图 矢量</option>
+              <option value="satellite">天地图 卫星</option>
+            </optgroup>
+          </select>
+          <div id="tiandituKeyContainer" class="tianditu-key-box">
+            <input type="text" id="tiandituKeyInput" placeholder="天地图 Key" value="fc97d01c0e3e98289295da844e1f2dad">
+            <a href="https://www.bilibili.com/video/BV1FhVhz6EEh/" target="_blank" class="key-link">申请教程</a>
+          </div>
+          <div class="search-box">
+            <input type="text" id="searchInput" placeholder="搜索位置..." onkeypress="if(event.keyCode===13)searchLocation()">
+            <button class="btn-icon" onclick="searchLocation()">🔍</button>
+          </div>
+          <div id="searchResult" class="search-result"></div>
+          <button id="getLocationBtn" class="btn-location">📍 获取位置</button>
+        </div>
+      </div>
+
+      <div class="card collapsible">
+        <div class="card-header" onclick="toggleCard(this)">
+          <span class="card-icon">✏️</span>
+          <span>绘制工具</span>
+          <span class="collapse-icon">▼</span>
+        </div>
+        <div class="card-body">
+          <div class="mode-switch">
+            <button id="freeDrawMode" class="mode-btn active">自由绘制</button>
+            <button id="shapeDrawMode" class="mode-btn">形状生成</button>
+            <button id="editModeBtn" class="mode-btn">编辑</button>
+          </div>
+          
+          <div id="shapeGenerationPanel" class="shape-panel" style="display: none;">
+            <div class="form-row">
+              <select id="shapeType" class="styled-select">
+                <option value="400m">标准跑道 400m</option>
+                <option value="300m">中型跑道 300m</option>
+                <option value="200m">小型跑道 200m</option>
+              </select>
+            </div>
+            <div class="slider-control">
+              <label>旋转角度</label>
+              <div class="slider-row">
+                <input type="range" id="rotationSlider" min="0" max="360" value="0">
+                <input type="number" id="rotationInput" min="0" max="360" value="0">
+                <span>°</span>
+              </div>
+            </div>
+            <div class="slider-control">
+              <label>纬度偏移 / 经度偏移 (度)</label>
+              <div class="slider-row offset-row">
+                <input type="number" id="offsetLatInput" value="0" step="0.0001" placeholder="纬度">
+                <input type="number" id="offsetLngInput" value="0" step="0.0001" placeholder="经度">
+              </div>
+            </div>
+            <button id="generateShapeBtn" class="btn-primary">在地图中心生成</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card collapsible">
+        <div class="card-header" onclick="toggleCard(this)">
+          <span class="card-icon">📍</span>
+          <span>当前路线</span>
+          <span id="routeStatus" class="route-status">未绘制</span>
+          <span class="collapse-icon">▼</span>
+        </div>
+        <div class="card-body">
+          <div id="distanceInfo" class="distance-display">0.00 km</div>
+          <div class="route-actions">
+            <button id="undoBtn" class="btn-secondary">↩️ 回退</button>
+            <button id="clearRoute" class="btn-secondary">🗑️ 清空</button>
+            <button id="saveRouteBtn" class="btn-secondary">💾 保存</button>
+            <button id="smoothBtn" class="btn-accent">✨ 平滑</button>
+          </div>
+          
+          <div id="savedRoutesList" class="saved-routes"></div>
+          
+          <div class="lap-calc">
+            <div class="lap-calc-label">
+              <span>圈数</span>
+              <span>目标距离 (km)</span>
+            </div>
+            <div class="form-row-2">
+              <input type="number" id="lapCount" value="1" min="0.1" step="0.01" placeholder="圈数">
+              <input type="number" id="targetDistance" value="5" min="0.1" step="0.1" placeholder="目标 km">
+            </div>
+            <button id="calculateLapsBtn" class="btn-small">按距离计算圈数</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card collapsible">
+        <div class="card-header" onclick="toggleCard(this)">
+          <span class="card-icon">⚙️</span>
+          <span>运动参数</span>
+          <span class="collapse-icon">▼</span>
+        </div>
+        <div class="card-body">
+          <div class="param-grid">
+            <div class="param-item">
+              <label>静息心率</label>
+              <input type="number" id="hrRest" value="60" min="30" max="100">
+            </div>
+            <div class="param-item">
+              <label>最大心率</label>
+              <input type="number" id="hrMax" value="180" min="100" max="220">
+            </div>
+            <div class="param-item">
+              <label>平均步频</label>
+              <input type="number" id="avgCadence" value="170" min="120" max="210">
+            </div>
+            <div class="param-item">
+              <label>体重 kg</label>
+              <input type="number" id="weightInput" value="60" min="30" max="200">
+            </div>
+          </div>
+          <div class="param-grid">
+            <div class="param-item">
+              <label>功率系数</label>
+              <input type="number" id="powerFactor" value="1.3" min="0.5" max="3.0" step="0.1">
+            </div>
+            <div class="param-item">
+              <label>GPS偏移</label>
+              <input type="number" id="gpsDrift" value="0.1" min="0" max="1" step="0.01">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card collapsible">
+        <div class="card-header" onclick="toggleCard(this)">
+          <span class="card-icon">📤</span>
+          <span>导出设置</span>
+          <span class="collapse-icon">▼</span>
+        </div>
+        <div class="card-body">
+          <div class="export-count">
+            <label>导出份数</label>
+            <input type="number" id="exportCount" value="1" min="1" max="10">
+          </div>
+          <div id="exportTimes" class="export-times"></div>
+        </div>
+      </div>
+
+      <div class="action-buttons">
+        <button id="generateFit" class="btn-generate">⚡ 生成 FIT 文件</button>
+        <button id="previewBtn" class="btn-preview">📊 预览曲线</button>
+      </div>
+
+      <div id="message" class="message"></div>
+
+      <div class="preview-panel">
+        <div class="preview-chart">
+          <h3>配速 min/km</h3>
+          <canvas id="paceChart"></canvas>
+        </div>
+        <div class="preview-chart">
+          <h3>心率 bpm</h3>
+          <canvas id="hrChart"></canvas>
+        </div>
+      </div>
+
+      <div id="liveInfo" class="live-info"></div>
+    </div>
+
+    <div id="map"></div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"
+          crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="./main.js"></script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+name = "fit-tool"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+# CORS origins: comma-separated list, or "*" for development only
+[vars]
+ALLOWED_ORIGINS = "*"
+
+[assets]
+directory = "./public"
