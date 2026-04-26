@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 >nul
 echo ==========================================
-echo   Keep Campus Run - Windows 一键启动
+echo   Fit Tool JS-Express-@garmin_fitsdk - Windows 一键启动
 echo ==========================================
 echo.
 

@@ -1,11 +1,11 @@
 #!/bin/bash
-# Termux 一键运行脚本 - Keep Campus Run FIT生成工具
+# Termux 一键运行脚本 - Fit Tool (JS-Express-@garmin_fitsdk)
 # 使用方式：将此脚本和项目文件放到Termux可访问的目录，执行 bash run.sh
 
 set -e
 
 echo "=========================================="
-echo "  Keep Campus Run - Termux 一键启动"
+echo "  Fit Tool JS-Express-@garmin_fitsdk - Termux 一键启动"
 echo "=========================================="
 
 # 检测是否已安装 Node.js

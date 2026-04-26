@@ -1050,7 +1050,7 @@ function updateSavedRoutesList() {
   
   container.style.border = 'none';
   container.innerHTML = '';
-  
+
   for (const name of routeNames) {
     const date = new Date(routes[name].savedAt).toLocaleDateString();
     const item = document.createElement('div');
@@ -1470,8 +1470,7 @@ async function previewActivity() {
     
     previewData = data;
     previewIndex = 0;
-    
-    // FIX: Clear previous preview timer to prevent memory leak
+
     if (previewTimer) {
       clearInterval(previewTimer);
       previewTimer = null;
