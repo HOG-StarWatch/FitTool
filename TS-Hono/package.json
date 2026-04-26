@@ -2,15 +2,20 @@
   "name": "fit-tool",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "wrangler dev",
+    "start": "tsx server.ts",
     "deploy": "wrangler deploy"
   },
   "dependencies": {
+    "@hono/node-server": "^1.13.8",
     "hono": "^4.12.14"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240117.0",
+    "@types/node": "^20.0.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.0.0",
     "wrangler": "^3.0.0"
   }
