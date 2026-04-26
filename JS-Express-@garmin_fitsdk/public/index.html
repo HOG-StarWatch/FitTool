@@ -19,7 +19,11 @@
             <img src="./HOG_S_64.png" alt="Logo" class="logo-icon">
           </a>
           <h1>Keep 校园跑</h1>
-          <button id="themeToggle" class="theme-toggle" title="切换主题">🌙</button>
+          <div class="theme-selector">
+            <button class="theme-selector-btn" data-theme="light" title="浅色主题"></button>
+            <button class="theme-selector-btn" data-theme="dark" title="深紫暗黑"></button>
+            <button class="theme-selector-btn" data-theme="glass" title="紫色玻璃"></button>
+          </div>
         </div>
 
       <div class="card collapsible">
@@ -199,6 +203,7 @@
       <div class="action-buttons">
         <button id="generateFit" class="btn-generate">⚡ 生成 FIT 文件</button>
         <button id="previewBtn" class="btn-preview">📊 预览曲线</button>
+        <button id="getLocationBtnMobile" class="btn-location" style="display: none;">📍 定位</button>
       </div>
 
       <div id="message" class="message"></div>

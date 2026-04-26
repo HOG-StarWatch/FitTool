@@ -18,26 +18,34 @@ function toggleCard(header) {
   }
 }
 
-// ==================== 暗夜模式模块 ====================
+// ==================== 三主题系统模块 ====================
 
 function initTheme() {
-  const savedTheme = localStorage.getItem('theme');
-  const themeToggle = document.getElementById('themeToggle');
+  const savedTheme = localStorage.getItem('theme') || 'dark';
+  const themeBtns = document.querySelectorAll('.theme-selector-btn');
   
-  if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-    document.body.classList.add('dark');
-    if (themeToggle) themeToggle.textContent = '☀️';
-  } else {
-    document.body.classList.remove('dark');
-    if (themeToggle) themeToggle.textContent = '🌙';
-  }
+  applyTheme(savedTheme);
   
-  if (themeToggle) {
-    themeToggle.addEventListener('click', () => {
-      const isDark = document.body.classList.toggle('dark');
-      localStorage.setItem('theme', isDark ? 'dark' : 'light');
-      themeToggle.textContent = isDark ? '☀️' : '🌙';
+  themeBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const theme = btn.dataset.theme;
+      applyTheme(theme);
+      localStorage.setItem('theme', theme);
     });
+  });
+}
+
+function applyTheme(theme) {
+  const themeBtns = document.querySelectorAll('.theme-selector-btn');
+  themeBtns.forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.theme === theme);
+  });
+  
+  if (theme === 'light') {
+    document.documentElement.removeAttribute('data-theme');
+    document.body.classList.remove('dark');
+  } else {
+    document.documentElement.setAttribute('data-theme', theme);
   }
 }
 
