@@ -4,9 +4,17 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --config wrangler.workers.toml",
+    "dev:local": "tsx server.ts",
     "start": "tsx server.ts",
-    "deploy": "wrangler deploy"
+    "build": "npm run build:workers && npm run build:pages",
+    "build:workers": "wrangler deploy --dry-run --outdir ./dist-workers --config wrangler.workers.toml",
+    "build:pages": "tsx build.pages.ts",
+    "deploy": "npm run deploy:workers",
+    "deploy:workers": "wrangler deploy --config wrangler.workers.toml",
+    "deploy:pages": "npm run build:pages",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf dist-workers dist-pages node_modules"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.8",
@@ -14,9 +22,10 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240117.0",
-    "@types/node": "^20.0.0",
+    "@types/node": "^20.11.0",
+    "esbuild": "^0.24.0",
     "tsx": "^4.21.0",
-    "typescript": "^5.0.0",
-    "wrangler": "^3.0.0"
+    "typescript": "^5.3.0",
+    "wrangler": "^3.85.0"
   }
 }

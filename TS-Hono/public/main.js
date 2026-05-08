@@ -1501,6 +1501,51 @@ async function previewActivity() {
 
 document.getElementById("previewBtn")?.addEventListener("click", previewActivity);
 
+// ==================== 服务状态检测模块 ====================
+
+let serviceCheckInterval = null;
+
+async function checkServiceStatus() {
+  const statusEl = document.getElementById('serviceStatus');
+  if (!statusEl) return;
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+    const res = await fetch('/api/health', {
+      method: 'GET',
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    if (res.ok) {
+      statusEl.classList.remove('offline');
+      statusEl.classList.add('online');
+      const data = await res.json().catch(() => ({}));
+      const statusText = data.status || data.message || '在线';
+      statusEl.querySelector('.status-text').textContent = statusText;
+    } else {
+      throw new Error('Health check failed');
+    }
+  } catch (e) {
+    statusEl.classList.remove('online');
+    statusEl.classList.add('offline');
+    statusEl.querySelector('.status-text').textContent = '离线';
+  }
+}
+
+document.getElementById('serviceStatus')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  checkServiceStatus();
+  updateMessage('正在刷新服务状态...');
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+  checkServiceStatus();
+});
+
 // ==================== 预览回放功能模块 ====================
 
 function updateLiveInfo(sample) {

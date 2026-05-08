@@ -1659,6 +1659,74 @@ html, body {
   background: linear-gradient(135deg, #1a1625 25%, #d946ef 50%, #a855f7 75%, #1a1625 100%);
 }
 
+.service-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-size: 11px;
+  font-weight: 500;
+  color: #fff;
+}
+
+.service-status:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: scale(1.02);
+}
+
+.service-status:active {
+  transform: scale(0.98);
+}
+
+.service-status.online {
+  background: rgba(52, 199, 89, 0.25);
+  border-color: rgba(52, 199, 89, 0.4);
+}
+
+.service-status.offline {
+  background: rgba(255, 59, 48, 0.25);
+  border-color: rgba(255, 59, 48, 0.4);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ffa500;
+  transition: background var(--transition-fast);
+}
+
+.service-status.online .status-dot {
+  background: #34c759;
+  box-shadow: 0 0 6px rgba(52, 199, 89, 0.6);
+}
+
+.service-status.offline .status-dot {
+  background: #ff3b30;
+  box-shadow: 0 0 6px rgba(255, 59, 48, 0.6);
+}
+
+.status-text {
+  letter-spacing: 0.3px;
+}
+
+[data-theme="dark"] .service-status,
+[data-theme="glass"] .service-status {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .service-status:hover,
+[data-theme="glass"] .service-status:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
 @media screen and (max-width: 768px) {
   .theme-selector {
     gap: 3px;
@@ -1667,5 +1735,15 @@ html, body {
   .theme-selector-btn {
     width: 22px;
     height: 22px;
+  }
+
+  .service-status {
+    padding: 3px 8px;
+    font-size: 10px;
+  }
+
+  .status-dot {
+    width: 7px;
+    height: 7px;
   }
 }

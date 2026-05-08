@@ -6,6 +6,11 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "types": ["@cloudflare/workers-types", "@types/node"]
-  }
+    "types": ["@cloudflare/workers-types", "@types/node"],
+    "declaration": true,
+    "sourceMap": false,
+    "baseUrl": "."
+  },
+  "include": ["src/**/*", "server.ts", "build.pages.ts"],
+  "exclude": ["node_modules", "dist", "dist-workers"]
 }

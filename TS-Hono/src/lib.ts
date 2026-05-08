@@ -1,27 +1,23 @@
-import { Hono } from 'hono';
-import { cors } from 'hono/cors';
 import { FitEncoder, toSemicircles } from './fit';
 
-// ==================== Constants ====================
-const MAX_POINTS = 10000;
-const ROUTE_CLOSURE_THRESHOLD_METERS = 5;
-const DEFAULT_WEIGHT_KG = 65;
-const DEFAULT_POWER_FACTOR = 1.3;
-const DEFAULT_AVG_CADENCE = 170;
-const DEFAULT_PACE_SEC_PER_KM = 360;
-const DEFAULT_HR_REST = 60;
-const DEFAULT_HR_MAX = 180;
-const WARMUP_DURATION_SEC = 60;
-const MIN_WEIGHT_KG = 30;
-const MAX_WEIGHT_KG = 150;
+export const MAX_POINTS = 10000;
+export const ROUTE_CLOSURE_THRESHOLD_METERS = 5;
+export const DEFAULT_WEIGHT_KG = 65;
+export const DEFAULT_POWER_FACTOR = 1.3;
+export const DEFAULT_AVG_CADENCE = 170;
+export const DEFAULT_PACE_SEC_PER_KM = 360;
+export const DEFAULT_HR_REST = 60;
+export const DEFAULT_HR_MAX = 180;
+export const WARMUP_DURATION_SEC = 60;
+export const MIN_WEIGHT_KG = 30;
+export const MAX_WEIGHT_KG = 150;
 
-// ==================== Types ====================
-interface RoutePoint {
+export interface RoutePoint {
   lat: number;
   lng: number;
 }
 
-interface SampleData {
+export interface SampleData {
   timeSec: number;
   distance: number;
   speed: number;
@@ -35,7 +31,7 @@ interface SampleData {
   lng: number;
 }
 
-interface ProcessedRoute {
+export interface ProcessedRoute {
   startDate: Date;
   totalDist: number;
   pace: number;
@@ -51,7 +47,7 @@ interface ProcessedRoute {
   totalDurationSec: number;
 }
 
-interface RequestBody {
+export interface RequestBody {
   startTime?: string;
   points?: RoutePoint[];
   paceSecondsPerKm?: number;
@@ -65,29 +61,7 @@ interface RequestBody {
   avgCadence?: number;
 }
 
-// ==================== App Setup ====================
-type Bindings = {
-  ALLOWED_ORIGINS?: string;
-};
-
-const app = new Hono<{ Bindings: Bindings }>();
-
-// FIX: CORS restricted to configurable origins; no wildcard
-// Set ALLOWED_ORIGINS env var to comma-separated origins (e.g. "https://example.com")
-// If not set, no CORS headers are added (same-origin requests work without CORS)
-app.use('/api/*', async (c, next) => {
-  const origins = c.env.ALLOWED_ORIGINS;
-  if (origins) {
-    const originList = origins.split(',').map(s => s.trim());
-    if (originList.includes('*')) {
-      return cors()(c, next);
-    }
-    return cors({ origin: originList, allowMethods: ['POST', 'OPTIONS'], allowHeaders: ['Content-Type'], maxAge: 86400 })(c, next);
-  }
-  await next();
-});
-
-// ==================== Utility Functions ====================
+export { FitEncoder, toSemicircles };
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -100,10 +74,7 @@ function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
   const dLon = toRad(lon2 - lon1);
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(toRad(lat1)) *
-      Math.cos(toRad(lat2)) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
@@ -126,16 +97,11 @@ function buildClosedBasePoints(points: RoutePoint[]): RoutePoint[] {
   return [...points, { lat: first.lat, lng: first.lng }];
 }
 
-// FIX: Improved calorie calculation using MET-based estimation
 function computeCalories(weightKg: number, distanceM: number, paceSecPerKm: number): number {
   const distanceKm = distanceM / 1000;
-  // MET factor scales with running speed: faster pace = higher energy expenditure
-  // ~1.0 kcal/km/kg at slow jog, ~1.8 at fast run
   const metFactor = 0.9 + (1000 / paceSecPerKm) * 0.25;
   return Math.round(weightKg * distanceKm * metFactor);
 }
-
-// ==================== Data Generation Functions ====================
 
 function generateCadence(speed: number, targetAvgCadence: number, index: number, totalPoints: number): number {
   const base = targetAvgCadence;
@@ -174,8 +140,6 @@ function generateVerticalOscillation(speed: number, cadence: number): number {
   const cmValue = clamp(base + cadenceEffect + noise, 6, 12);
   return cmValue * 10;
 }
-
-// ==================== Sample Computation ====================
 
 interface ComputeSamplesResult {
   samples: SampleData[];
@@ -300,26 +264,20 @@ function computeSamples(
   return { samples, totalDurationSec: computedTotalDurationSec };
 }
 
-// ==================== Shared Route Processing ====================
-// Extracts common logic from /api/preview and /api/generate-fit to avoid duplication
-
-function processRouteRequest(body: RequestBody): { error: string } | ProcessedRoute {
+export function processRouteRequest(body: RequestBody): { error: string } | ProcessedRoute {
   const {
     startTime, points, paceSecondsPerKm, hrRest, hrMax, lapCount, variantIndex,
     weightKg, powerFactor, gpsDrift, avgCadence,
   } = body || {};
 
-  // Validate required fields
   if (!startTime || !points || !Array.isArray(points) || points.length < 2) {
     return { error: '缺少参数：需要 startTime、至少两个轨迹点 points' };
   }
 
-  // FIX: Validate points count to prevent abuse
   if (points.length > MAX_POINTS) {
     return { error: `轨迹点数量超过上限 (${MAX_POINTS})` };
   }
 
-  // FIX: Validate point coordinates
   for (let i = 0; i < points.length; i++) {
     const p = points[i];
     if (typeof p.lat !== 'number' || typeof p.lng !== 'number' ||
@@ -329,13 +287,11 @@ function processRouteRequest(body: RequestBody): { error: string } | ProcessedRo
     }
   }
 
-  // Parse startTime
   const startDate = new Date(startTime);
   if (Number.isNaN(startDate.getTime())) {
     return { error: 'startTime 格式不正确' };
   }
 
-  // Parse parameters with defaults and validation
   const weight = (Number.isFinite(Number(weightKg)) && weightKg! > MIN_WEIGHT_KG && weightKg! < MAX_WEIGHT_KG)
     ? Number(weightKg) : DEFAULT_WEIGHT_KG;
   const power = (Number.isFinite(Number(powerFactor)) && (powerFactor ?? 0) > 0)
@@ -351,7 +307,6 @@ function processRouteRequest(body: RequestBody): { error: string } | ProcessedRo
   const variantRaw = Number(variantIndex);
   const variant = (Number.isFinite(variantRaw) && variantRaw > 0) ? Math.floor(variantRaw) : 1;
 
-  // Build points with laps and GPS drift
   const basePoints = buildClosedBasePoints(points);
   const allPoints: RoutePoint[] = [];
   const usedLaps = laps > 0 ? laps : 1;
@@ -359,7 +314,6 @@ function processRouteRequest(body: RequestBody): { error: string } | ProcessedRo
   const fullLaps = Math.floor(usedLaps);
   const partialLap = usedLaps - fullLaps;
 
-  // FIX: Removed unused lapIndex variable; each lap gets its own random drift offset
   for (let i = 0; i < fullLaps; i++) {
     let offsetLatMeters = 0;
     let offsetLonMeters = 0;
@@ -390,7 +344,6 @@ function processRouteRequest(body: RequestBody): { error: string } | ProcessedRo
     }
   }
 
-  // Calculate cumulative distances
   const distances = [0];
   let totalDist = 0;
   for (let i = 1; i < allPoints.length; i++) {
@@ -403,10 +356,8 @@ function processRouteRequest(body: RequestBody): { error: string } | ProcessedRo
     return { error: '轨迹距离为 0，请绘制更长的路线' };
   }
 
-  // Compute calories using improved formula
   const calories = computeCalories(weight, totalDist, pace);
 
-  // Compute exercise samples
   const { samples, totalDurationSec } = computeSamples(
     allPoints, distances, totalDist, pace, hrRestVal, hrMaxVal, targetAvgCadence, weight, power,
   );
@@ -417,139 +368,104 @@ function processRouteRequest(body: RequestBody): { error: string } | ProcessedRo
   };
 }
 
-// ==================== API Routes ====================
+export function generateFitFile(result: ProcessedRoute): Response {
+  const { startDate, totalDist, totalDurationSec, hrMaxVal, variant, samples, calories } = result;
+  const avgSpeed = totalDist / totalDurationSec;
 
-app.post('/api/preview', async (c) => {
-  try {
-    const body = await c.req.json<RequestBody>();
-    const result = processRouteRequest(body || {});
-    if ('error' in result) return c.json({ error: result.error }, 400);
-
-    return c.json({
-      totalDistanceMeters: result.totalDist,
-      totalDurationSec: result.totalDurationSec,
-      samples: result.samples,
-      calories: result.calories,
-    });
-  } catch (e) {
-    console.error(e);
-    return c.json({ error: '生成预览失败' }, 500);
+  let totalPower = 0;
+  let totalCadence = 0;
+  let totalHr = 0;
+  for (const s of samples) {
+    totalPower += s.power;
+    totalCadence += s.cadence;
+    totalHr += s.heartRate;
   }
-});
+  const avgPower = Math.round(totalPower / samples.length);
+  const calculatedAvgCadence = Math.round(totalCadence / samples.length);
+  const avgHr = Math.round(totalHr / samples.length);
 
-app.post('/api/generate-fit', async (c) => {
-  try {
-    const body = await c.req.json<RequestBody>();
-    const result = processRouteRequest(body || {});
-    if ('error' in result) return c.json({ error: result.error }, 400);
+  const sessionEnd = new Date(startDate.getTime() + totalDurationSec * 1000);
 
-    const { startDate, totalDist, totalDurationSec, hrMaxVal, variant, samples, calories } = result;
-    const avgSpeed = totalDist / totalDurationSec;
+  const encoder = new FitEncoder({
+    type: 'activity',
+    manufacturer: 'development',
+    product: 1,
+    serialNumber: 1,
+    timeCreated: startDate,
+    sport: 'running',
+    subSport: 'generic',
+  });
 
-    // Calculate summary statistics
-    let totalPower = 0;
-    let totalCadence = 0;
-    let totalHr = 0;
-    for (const s of samples) {
-      totalPower += s.power;
-      totalCadence += s.cadence;
-      totalHr += s.heartRate;
-    }
-    const avgPower = Math.round(totalPower / samples.length);
-    // Keep the raw cadence average for derived metrics; FIT writing follows local scaling rules.
-    const calculatedAvgCadence = Math.round(totalCadence / samples.length);
-    const avgHr = Math.round(totalHr / samples.length);
+  encoder.writeFileIdMessage();
+  encoder.writeDeviceInfoMessage(startDate);
 
-    const sessionEnd = new Date(startDate.getTime() + totalDurationSec * 1000);
-
-    const encoder = new FitEncoder({
-      type: 'activity',
-      manufacturer: 'development',
-      product: 1,
-      serialNumber: 1,
-      timeCreated: startDate,
-      sport: 'running',
-      subSport: 'generic',
+  for (const s of samples) {
+    const timestamp = new Date(startDate.getTime() + s.timeSec * 1000);
+    encoder.writeRecordMessage({
+      timestamp,
+      positionLat: toSemicircles(s.lat),
+      positionLong: toSemicircles(s.lng),
+      distance: s.distance,
+      speed: s.speed,
+      heartRate: s.heartRate,
+      cadence: Math.round(s.cadence / 2),
+      power: s.power,
+      enhancedSpeed: s.speed,
+      stanceTime: s.groundTime,
+      stanceTimePercent: clamp((s.groundTime / (s.groundTime + s.flightTime)) * 100, 40, 70),
+      verticalOscillation: s.verticalOscillation,
+      stepLength: (s.speed * 1000) / (s.cadence / 60) / 100,
     });
-
-    encoder.writeFileIdMessage();
-    encoder.writeDeviceInfoMessage(startDate);
-
-    for (const s of samples) {
-      const timestamp = new Date(startDate.getTime() + s.timeSec * 1000);
-      encoder.writeRecordMessage({
-        timestamp,
-        positionLat: toSemicircles(s.lat),
-        positionLong: toSemicircles(s.lng),
-        distance: s.distance,
-        speed: s.speed,
-        heartRate: s.heartRate,
-        cadence: Math.round(s.cadence / 2),
-        power: s.power,
-        enhancedSpeed: s.speed,
-        stanceTime: s.groundTime,
-        stanceTimePercent: clamp((s.groundTime / (s.groundTime + s.flightTime)) * 100, 40, 70),
-        verticalOscillation: s.verticalOscillation,
-        stepLength: (s.speed * 1000) / (s.cadence / 60) / 100,
-      });
-    }
-
-    encoder.writeLapMessage({
-      timestamp: sessionEnd,
-      startTime: startDate,
-      totalElapsedTime: totalDurationSec,
-      totalTimerTime: totalDurationSec,
-      totalDistance: totalDist,
-      totalCalories: calories,
-      sport: 'running',
-      subSport: 'generic',
-      avgSpeed,
-      avgHeartRate: avgHr,
-      maxHeartRate: hrMaxVal,
-      avgCadence: Math.round(calculatedAvgCadence / 2),
-      avgPower,
-    });
-
-    encoder.writeSessionMessage({
-      timestamp: sessionEnd,
-      startTime: startDate,
-      totalElapsedTime: totalDurationSec,
-      totalTimerTime: totalDurationSec,
-      totalDistance: totalDist,
-      totalCalories: calories,
-      sport: 'running',
-      subSport: 'generic',
-      avgSpeed,
-      avgHeartRate: avgHr,
-      maxHeartRate: hrMaxVal,
-      avgCadence: Math.round(calculatedAvgCadence / 2),
-      avgPower,
-    });
-
-    encoder.writeActivityMessage({
-      timestamp: sessionEnd,
-      totalTimerTime: totalDurationSec,
-      numSessions: 1,
-      type: 'manual',
-    });
-
-    const uint8Array = encoder.close();
-
-    return new Response(uint8Array.buffer.slice(
-      uint8Array.byteOffset,
-      uint8Array.byteOffset + uint8Array.byteLength
-    ) as ArrayBuffer, {
-      headers: {
-        'Content-Type': 'application/vnd.ant.fit',
-        'Content-Disposition': `attachment; filename=run_${variant}.fit`,
-      },
-    });
-  } catch (e) {
-    console.error(e);
-    return c.json({ error: '生成 FIT 文件失败' }, 500);
   }
-});
 
-export default {
-  fetch: app.fetch,
-};
+  encoder.writeLapMessage({
+    timestamp: sessionEnd,
+    startTime: startDate,
+    totalElapsedTime: totalDurationSec,
+    totalTimerTime: totalDurationSec,
+    totalDistance: totalDist,
+    totalCalories: calories,
+    sport: 'running',
+    subSport: 'generic',
+    avgSpeed,
+    avgHeartRate: avgHr,
+    maxHeartRate: hrMaxVal,
+    avgCadence: Math.round(calculatedAvgCadence / 2),
+    avgPower,
+  });
+
+  encoder.writeSessionMessage({
+    timestamp: sessionEnd,
+    startTime: startDate,
+    totalElapsedTime: totalDurationSec,
+    totalTimerTime: totalDurationSec,
+    totalDistance: totalDist,
+    totalCalories: calories,
+    sport: 'running',
+    subSport: 'generic',
+    avgSpeed,
+    avgHeartRate: avgHr,
+    maxHeartRate: hrMaxVal,
+    avgCadence: Math.round(calculatedAvgCadence / 2),
+    avgPower,
+  });
+
+  encoder.writeActivityMessage({
+    timestamp: sessionEnd,
+    totalTimerTime: totalDurationSec,
+    numSessions: 1,
+    type: 'manual',
+  });
+
+  const uint8Array = encoder.close();
+
+  return new Response(uint8Array.buffer.slice(
+    uint8Array.byteOffset,
+    uint8Array.byteOffset + uint8Array.byteLength
+  ) as ArrayBuffer, {
+    headers: {
+      'Content-Type': 'application/vnd.ant.fit',
+      'Content-Disposition': `attachment; filename=run_${variant}.fit`,
+    },
+  });
+}
