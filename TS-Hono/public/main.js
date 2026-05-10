@@ -108,20 +108,22 @@ const CoordTransform = {
   PI: 3.1415926535897932384626,
   a: 6378245.0,
   ee: 0.00669342162296594323,
-  
-  GCJ02_TO_WGS84(lng, lat) {
-    let dlat = this.transformLat(lng - 105.0, lat - 35.0);
-    let dlng = this.transformLng(lng - 105.0, lat - 35.0);
-    const radlat = lat / 180.0 * this.PI;
-    let magic = Math.sin(radlat);
-    magic = 1 - this.ee * magic * magic;
-    const sqrtmagic = Math.sqrt(magic);
-    dlat = (dlat * 180.0) / ((this.a * (1 - this.ee)) / (magic * sqrtmagic) * this.PI);
-    dlng = (dlng * 180.0) / ((this.a / sqrtmagic) * Math.cos(radlat) * this.PI);
-    return [lng - dlng, lat - dlat];
+  x_PI: 3.14159265358979324 * 3000.0 / 180.0,
+
+  /**
+   * 判断坐标是否在中国境外（无需偏移）
+   */
+  isOutOfChina(lng, lat) {
+    return (lng < 72.004 || lng > 137.8347) || (lat < 0.8293 || lat > 55.8271);
   },
-  
+
+  /**
+   * WGS84 转 GCJ02 (火星坐标系)
+   */
   WGS84_TO_GCJ02(lng, lat) {
+    if (this.isOutOfChina(lng, lat)) {
+      return [lng, lat];
+    }
     let dlat = this.transformLat(lng - 105.0, lat - 35.0);
     let dlng = this.transformLng(lng - 105.0, lat - 35.0);
     const radlat = lat / 180.0 * this.PI;
@@ -133,22 +135,60 @@ const CoordTransform = {
     return [lng + dlng, lat + dlat];
   },
 
+  /**
+   * GCJ02 转 WGS84
+   */
+  GCJ02_TO_WGS84(lng, lat) {
+    if (this.isOutOfChina(lng, lat)) {
+      return [lng, lat];
+    }
+    let dlat = this.transformLat(lng - 105.0, lat - 35.0);
+    let dlng = this.transformLng(lng - 105.0, lat - 35.0);
+    const radlat = lat / 180.0 * this.PI;
+    let magic = Math.sin(radlat);
+    magic = 1 - this.ee * magic * magic;
+    const sqrtmagic = Math.sqrt(magic);
+    dlat = (dlat * 180.0) / ((this.a * (1 - this.ee)) / (magic * sqrtmagic) * this.PI);
+    dlng = (dlng * 180.0) / ((this.a / sqrtmagic) * Math.cos(radlat) * this.PI);
+    return [lng - dlng, lat - dlat];
+  },
+
+  /**
+   * GCJ02 转 BD09 (百度坐标系)
+   */
+  GCJ02_TO_BD09(lng, lat) {
+    let z = Math.sqrt(lng * lng + lat * lat) + 0.00002 * Math.sin(lat * this.x_PI);
+    let theta = Math.atan2(lat, lng) + 0.000003 * Math.cos(lng * this.x_PI);
+    return [z * Math.cos(theta) + 0.0065, z * Math.sin(theta) + 0.006];
+  },
+
+  /**
+   * BD09 转 GCJ02
+   */
   BD09_TO_GCJ02(lng, lat) {
     let x = lng - 0.0065;
     let y = lat - 0.006;
-    let z = Math.sqrt(x * x + y * y) - 0.00002 * Math.sin(y * this.PI * 3000.0 / 180.0);
-    let theta = Math.atan2(y, x) - 0.000003 * Math.cos(x * this.PI * 3000.0 / 180.0);
+    let z = Math.sqrt(x * x + y * y) - 0.00002 * Math.sin(y * this.x_PI);
+    let theta = Math.atan2(y, x) - 0.000003 * Math.cos(x * this.x_PI);
     return [z * Math.cos(theta), z * Math.sin(theta)];
   },
 
-  GCJ02_TO_BD09(lng, lat) {
-    let x = lng;
-    let y = lat;
-    let z = Math.sqrt(x * x + y * y) + 0.00002 * Math.sin(y * this.PI * 3000.0 / 180.0);
-    let theta = Math.atan2(y, x) + 0.000003 * Math.cos(x * this.PI * 3000.0 / 180.0);
-    return [z * Math.cos(theta) + 0.0065, z * Math.sin(theta) + 0.006];
+  /**
+   * WGS84 转 BD09
+   */
+  WGS84_TO_BD09(lng, lat) {
+    const [gcjLng, gcjLat] = this.WGS84_TO_GCJ02(lng, lat);
+    return this.GCJ02_TO_BD09(gcjLng, gcjLat);
   },
-  
+
+  /**
+   * BD09 转 WGS84
+   */
+  BD09_TO_WGS84(lng, lat) {
+    const [gcjLng, gcjLat] = this.BD09_TO_GCJ02(lng, lat);
+    return this.GCJ02_TO_WGS84(gcjLng, gcjLat);
+  },
+
   transformLat(x, y) {
     let ret = -100.0 + 2.0 * x + 3.0 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * Math.sqrt(Math.abs(x));
     ret += (20.0 * Math.sin(6.0 * x * this.PI) + 20.0 * Math.sin(2.0 * x * this.PI)) * 2.0 / 3.0;
@@ -156,7 +196,7 @@ const CoordTransform = {
     ret += (160.0 * Math.sin(y / 12.0 * this.PI) + 320 * Math.sin(y * this.PI / 30.0)) * 2.0 / 3.0;
     return ret;
   },
-  
+
   transformLng(x, y) {
     let ret = 300.0 + x + 2.0 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * Math.sqrt(Math.abs(x));
     ret += (20.0 * Math.sin(6.0 * x * this.PI) + 20.0 * Math.sin(2.0 * x * this.PI)) * 2.0 / 3.0;
@@ -191,54 +231,103 @@ function getCurrentCoordSys() {
 }
 
 const CoordManager = {
+  /**
+   * 将当前地图坐标系的坐标转换为 WGS84
+   * @param {number} lng - 经度
+   * @param {number} lat - 纬度
+   * @returns {[number, number]} [lng, lat] WGS84坐标
+   */
   toWGS84(lng, lat) {
     const sys = getCurrentCoordSys();
     if (sys === CoordSys.GCJ02) {
       return CoordTransform.GCJ02_TO_WGS84(lng, lat);
     } else if (sys === CoordSys.BD09) {
-      const [gcjLng, gcjLat] = CoordTransform.BD09_TO_GCJ02(lng, lat);
-      return CoordTransform.GCJ02_TO_WGS84(gcjLng, gcjLat);
+      return CoordTransform.BD09_TO_WGS84(lng, lat);
     }
     return [lng, lat];
   },
-  
+
+  /**
+   * 将 WGS84 坐标转换为当前地图坐标系
+   * @param {number} lng - 经度
+   * @param {number} lat - 纬度
+   * @returns {[number, number]} [lng, lat] 当前地图坐标系坐标
+   */
   fromWGS84(lng, lat) {
     const sys = getCurrentCoordSys();
     if (sys === CoordSys.GCJ02) {
       return CoordTransform.WGS84_TO_GCJ02(lng, lat);
     } else if (sys === CoordSys.BD09) {
-      const [gcjLng, gcjLat] = CoordTransform.WGS84_TO_GCJ02(lng, lat);
-      return CoordTransform.GCJ02_TO_BD09(gcjLng, gcjLat);
+      return CoordTransform.WGS84_TO_BD09(lng, lat);
     }
     return [lng, lat];
   },
-  
+
+  /**
+   * 将当前地图坐标系的坐标点转换为 WGS84 点对象
+   * @param {number} lng - 经度
+   * @param {number} lat - 纬度
+   * @returns {{lng: number, lat: number}} WGS84点对象
+   */
   toWGS84Point(lng, lat) {
     const [newLng, newLat] = this.toWGS84(lng, lat);
     return { lng: newLng, lat: newLat };
   },
-  
+
+  /**
+   * 将 WGS84 点对象转换为当前地图坐标系点对象
+   * @param {number} lng - 经度
+   * @param {number} lat - 纬度
+   * @returns {{lng: number, lat: number}} 当前地图坐标系点对象
+   */
   fromWGS84Point(lng, lat) {
     const [newLng, newLat] = this.fromWGS84(lng, lat);
     return { lng: newLng, lat: newLat };
   },
-  
+
+  /**
+   * 将点数组从当前地图坐标系转换为 WGS84
+   * @param {Array<{lng: number, lat: number}>} points - 点数组
+   * @returns {Array<{lng: number, lat: number}>} WGS84点数组
+   */
   toWGS84Array(points) {
     return points.map(p => this.toWGS84Point(p.lng, p.lat));
   },
-  
+
+  /**
+   * 将点数组从 WGS84 转换为当前地图坐标系
+   * @param {Array<{lng: number, lat: number}>} points - WGS84点数组
+   * @returns {Array<{lng: number, lat: number}>} 当前地图坐标系点数组
+   */
   fromWGS84Array(points) {
     return points.map(p => this.fromWGS84Point(p.lng, p.lat));
   },
-  
+
+  /**
+   * 解析地图点击事件的坐标（Leaflet返回的是 {lat, lng}）
+   * @param {number} lat - 纬度（Leaflet格式）
+   * @param {number} lng - 经度（Leaflet格式）
+   * @returns {{lng: number, lat: number}} WGS84点对象
+   */
   parseMapClick(lat, lng) {
     return this.toWGS84Point(lng, lat);
   },
-  
+
+  /**
+   * 将 WGS84 点转换为地图显示格式 [lat, lng]（Leaflet格式）
+   * @param {{lng: number, lat: number}} wgs84Point - WGS84点对象
+   * @returns {[number, number]} [lat, lng] Leaflet格式坐标数组
+   */
   toMapDisplay(wgs84Point) {
-    return this.fromWGS84Point(wgs84Point.lng, wgs84Point.lat);
+    const converted = this.fromWGS84Point(wgs84Point.lng, wgs84Point.lat);
+    return [converted.lat, converted.lng];
   },
-  
+
+  /**
+   * 将 WGS84 点数组转换为地图显示格式 [[lat, lng], ...]
+   * @param {Array<{lng: number, lat: number}>} wgs84Points - WGS84点数组
+   * @returns {Array<[number, number]>} Leaflet格式坐标数组
+   */
   toMapDisplayArray(wgs84Points) {
     return wgs84Points.map(p => this.toMapDisplay(p));
   }
@@ -304,17 +393,26 @@ activeBaseLayer.addTo(map);
 function switchMapSource(sourceType) {
   updateTiandituKeyVisibility(sourceType);
   const tk = getTiandituKey();
-  
+
   const currentCenter = map.getCenter();
   const currentZoom = map.getZoom();
   const oldCoordSys = getCurrentCoordSys();
-  const wgsCenter = oldCoordSys === CoordSys.WGS84 
-    ? { lng: currentCenter.lng, lat: currentCenter.lat }
-    : CoordManager.toWGS84Point(currentCenter.lng, currentCenter.lat);
-  
+
+  // 保存当前地图中心点的 WGS84 坐标
+  let wgsCenter;
+  if (oldCoordSys === CoordSys.WGS84) {
+    wgsCenter = { lng: currentCenter.lng, lat: currentCenter.lat };
+  } else if (oldCoordSys === CoordSys.GCJ02) {
+    const [lng, lat] = CoordTransform.GCJ02_TO_WGS84(currentCenter.lng, currentCenter.lat);
+    wgsCenter = { lng, lat };
+  } else if (oldCoordSys === CoordSys.BD09) {
+    const [lng, lat] = CoordTransform.BD09_TO_WGS84(currentCenter.lng, currentCenter.lat);
+    wgsCenter = { lng, lat };
+  }
+
   if (activeBaseLayer) map.removeLayer(activeBaseLayer);
   if (activeLabelLayer) { map.removeLayer(activeLabelLayer); activeLabelLayer = null; }
-  
+
   switch(sourceType) {
     case 'osm': case 'osmde': case 'cyclOSM': case 'osmfr':
     case 'arcgis_street': case 'arcgis_satellite':
@@ -344,7 +442,8 @@ function switchMapSource(sourceType) {
       activeLabelLayer.addTo(map);
       break;
   }
-  
+
+  // 将 WGS84 中心点转换为新地图源的坐标系
   const newCoordSys = getMapCoordSys(sourceType);
   let newCenter;
   if (newCoordSys === CoordSys.WGS84) {
@@ -353,13 +452,13 @@ function switchMapSource(sourceType) {
     const [lng, lat] = CoordTransform.WGS84_TO_GCJ02(wgsCenter.lng, wgsCenter.lat);
     newCenter = [lat, lng];
   } else if (newCoordSys === CoordSys.BD09) {
-    const [gcjLng, gcjLat] = CoordTransform.WGS84_TO_GCJ02(wgsCenter.lng, wgsCenter.lat);
-    const [lng, lat] = CoordTransform.GCJ02_TO_BD09(gcjLng, gcjLat);
+    const [lng, lat] = CoordTransform.WGS84_TO_BD09(wgsCenter.lng, wgsCenter.lat);
     newCenter = [lat, lng];
   }
-  
+
   map.setView(newCenter, currentZoom);
-  
+
+  // 更新当前位置标记
   if (savedGpsWGS84) {
     const displayPoint = CoordManager.fromWGS84Point(savedGpsWGS84.lng, savedGpsWGS84.lat);
     if (currentLocationMarker) map.removeLayer(currentLocationMarker);
@@ -374,25 +473,28 @@ function switchMapSource(sourceType) {
     map.removeLayer(currentLocationMarker);
     currentLocationMarker = null;
   }
-  
+
+  // 刷新轨迹显示
   refreshRouteDisplay();
-  
+
   const select = document.getElementById('mapSourceSelect');
   if (select) updateMessage(`已切换到 ${select.options[select.selectedIndex].text}`);
 }
 
 function refreshRouteDisplay() {
   if (routePoints.length < 2) return;
+
+  // 将 WGS84 轨迹点转换为当前地图坐标系显示
   const displayPoints = CoordManager.toMapDisplayArray(routePoints);
-  
+
   if (polyline) {
     polyline.setLatLngs(displayPoints);
   }
-  
+
   if (routeEditor.active) {
     routeEditor.renderMarkers();
   }
-  
+
   if (shapeManipulator.isActive()) {
     shapeManipulator.redraw();
   }
@@ -687,11 +789,20 @@ class ShapeManipulator {
     this.currentRotation = rotation;
     this.currentOffset = { lat: offsetLat, lng: offsetLng };
     this.shapeType = shapeType;
-    this.mapCenter = center;
+    // center 是 WGS84 坐标，需要转换为当前地图坐标系用于生成形状
+    const mapCenter = CoordManager.fromWGS84Point(center.lng, center.lat);
+    this.mapCenter = mapCenter;
 
-    const points = this.generateShape(center, shapeType, rotation, offsetLat, offsetLng);
+    // generateShape 生成的是地图坐标系的点
+    const points = this.generateShape(mapCenter, shapeType, rotation, offsetLat, offsetLng);
     
-    this.polyline = L.polyline(points, { color: "#ff5722", weight: 4, opacity: 0.9 }).addTo(map);
+    // 将生成的点转换为 WGS84 保存到 routePoints
+    routePoints = CoordManager.toWGS84Array(points);
+    
+    // 将 WGS84 点转换回地图坐标系显示
+    const displayPoints = CoordManager.toMapDisplayArray(routePoints);
+    
+    this.polyline = L.polyline(displayPoints, { color: "#ff5722", weight: 4, opacity: 0.9 }).addTo(map);
     
     const bounds = this.polyline.getBounds();
     const centerPoint = bounds.getCenter();
@@ -717,12 +828,15 @@ class ShapeManipulator {
     this.moveMarker.on('drag', (e) => {
       if (!this.isDraggingMove) return;
       const newCenter = e.target.getLatLng();
+      // 计算偏移量（地图坐标系）
       const dx = newCenter.lng - this.dragStartShapeCenter.lng;
       const dy = newCenter.lat - this.dragStartShapeCenter.lat;
       this.currentOffset.lat = this.dragStartOffset.lat + dy;
       this.currentOffset.lng = this.dragStartOffset.lng + dx;
       if (offsetLatInput) offsetLatInput.value = this.currentOffset.lat.toFixed(6);
       if (offsetLngInput) offsetLngInput.value = this.currentOffset.lng.toFixed(6);
+      // 更新 mapCenter 为新的地图坐标系中心点
+      this.mapCenter = { lat: newCenter.lat, lng: newCenter.lng };
       this.redraw();
     });
     
@@ -791,12 +905,17 @@ class ShapeManipulator {
 
   redraw() {
     if (!this.active || !this.mapCenter) return;
+    // generateShape 生成的是基于地图坐标系的点
     const points = this.generateShape(this.mapCenter, this.shapeType, this.currentRotation, this.currentOffset.lat, this.currentOffset.lng);
-    
-    const displayPoints = CoordManager.toMapDisplayArray(points);
-    
+
+    // 将生成的点（当前地图坐标系）转换为 WGS84 保存
+    routePoints = CoordManager.toWGS84Array(points);
+
+    // 将 WGS84 点转换回当前地图坐标系显示
+    const displayPoints = CoordManager.toMapDisplayArray(routePoints);
+
     if (this.polyline) this.polyline.setLatLngs(displayPoints);
-    
+
     const bounds = this.polyline.getBounds();
     const centerPoint = bounds.getCenter();
     if (this.moveMarker) this.moveMarker.setLatLng(centerPoint);
@@ -804,13 +923,20 @@ class ShapeManipulator {
       const topCenter = this.polyline.getBounds().getNorthWest();
       this.rotateMarker.setLatLng(topCenter);
     }
-    this.updateRoutePoints();
     updateDistanceInfo();
     updateRouteStatus();
   }
 
+  /**
+   * 更新 mapCenter 为新的地图坐标系中心点
+   */
+  updateMapCenter(newMapCenter) {
+    this.mapCenter = newMapCenter;
+  }
+
   updateRoutePoints() {
     if (!this.active || !this.polyline) return;
+    // 从 polyline 获取的是当前地图坐标系的点，需要转换为 WGS84
     const rawLatLngs = this.polyline.getLatLngs();
     routePoints = rawLatLngs.map(p => CoordManager.toWGS84Point(p.lng, p.lat));
   }
@@ -858,30 +984,33 @@ class RouteEditor {
   renderMarkers() {
     this.clearMarkers();
     routePoints.forEach((point, index) => {
-      const displayPoint = CoordManager.toMapDisplay(point);
-      const marker = L.circleMarker([displayPoint.lat, displayPoint.lng], {
+      // 将 WGS84 点转换为当前地图坐标系显示
+      const displayLatLng = CoordManager.toMapDisplay(point);
+      const marker = L.circleMarker(displayLatLng, {
         radius: 6,
         color: '#2563eb',
         fillColor: '#2563eb',
         fillOpacity: 0.8,
         weight: 2
       }).addTo(map);
-      
+
       marker.dragging.enable();
-      
+
       marker.on('drag', () => {
         const newLatLng = marker.getLatLng();
+        // 将拖拽后的地图坐标转换为 WGS84 保存
         const wgsPoint = CoordManager.toWGS84Point(newLatLng.lng, newLatLng.lat);
         routePoints[index] = wgsPoint;
+        // 刷新轨迹线显示
         const displayPoints = CoordManager.toMapDisplayArray(routePoints);
         if (polyline) polyline.setLatLngs(displayPoints);
         updateDistanceInfo();
       });
-      
+
       marker.on('dragend', () => {
         pushHistory();
       });
-      
+
       this.markers.push(marker);
     });
   }
@@ -1014,19 +1143,21 @@ function loadRoute(routeName) {
     updateMessage('路径不存在', true);
     return;
   }
-  
+
   pushHistory();
+  // 保存的路径点是 WGS84 格式
   routePoints = routes[routeName].points;
-  
+
   if (polyline) map.removeLayer(polyline);
+  // 将 WGS84 点转换为当前地图坐标系显示
   const displayPoints = CoordManager.toMapDisplayArray(routePoints);
   polyline = L.polyline(displayPoints, { color: "#ff5722" }).addTo(map);
   map.fitBounds(polyline.getBounds(), { padding: [50, 50] });
-  
+
   shapeManipulator.deactivate();
   routeEditor.disable();
   switchDrawMode('free');
-  
+
   updateMessage(`已加载路径 "${routeName}"`);
   updateDistanceInfo();
   updateRouteStatus();
@@ -1142,27 +1273,29 @@ function updateDistanceInfo() {
 
 map.on("click", (e) => {
   if (currentDrawMode === 'shape' || shapeManipulator.isActive()) return;
-  
+
   if (isEditMode) {
     return;
   }
-  
+
   if (routeEditor.active) {
     return;
   }
-  
+
   if (routePoints.length > 0) pushHistory();
-  
+
+  // 将地图点击坐标（当前地图坐标系）转换为 WGS84 保存
   const wgsPoint = CoordManager.parseMapClick(e.latlng.lat, e.latlng.lng);
   routePoints.push(wgsPoint);
-  
+
+  // 将 WGS84 轨迹点转换为当前地图坐标系显示
   const displayPoints = CoordManager.toMapDisplayArray(routePoints);
   if (polyline) {
     polyline.setLatLngs(displayPoints);
   } else {
     polyline = L.polyline(displayPoints, { color: "#ff5722" }).addTo(map);
   }
-  
+
   updateMessage(`已添加点数：${routePoints.length}`);
   updateDistanceInfo();
 });
