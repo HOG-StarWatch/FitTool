@@ -1431,12 +1431,15 @@ async function generateFit() {
     return;
   }
   
+  showGeneratingModal('正在生成 FIT 文件...');
+  
   try {
     for (let i = 0; i < exportCount; i++) {
-      updateMessage(`正在生成第 ${i + 1}/${exportCount} 个 FIT 文件...`);
+      updateGeneratingModal(`正在生成第 ${i + 1}/${exportCount} 个 FIT 文件...`);
       
       const fileStart = new Date(timeInputs[i]?.value);
       if (Number.isNaN(fileStart.getTime())) {
+        hideGeneratingModal();
         updateMessage(`请为第 ${i + 1} 份设置开始时间`, true);
         return;
       }
@@ -1446,6 +1449,7 @@ async function generateFit() {
       const filePaceSecondsPerKm = pm * 60 + ps;
       
       if (!filePaceSecondsPerKm || filePaceSecondsPerKm <= 0) {
+        hideGeneratingModal();
         updateMessage(`第 ${i + 1} 份的配速无效`, true);
         return;
       }
@@ -1454,6 +1458,10 @@ async function generateFit() {
       const powerFactor = parseFloat(document.getElementById("powerFactor")?.value) || 1.3;
       const gpsDrift = parseFloat(document.getElementById("gpsDrift")?.value) || 0;
       const avgCadence = parseInt(document.getElementById("avgCadence")?.value) || 170;
+      const includeHeartRate = document.getElementById("includeHeartRate")?.checked ?? true;
+      const includePower = document.getElementById("includePower")?.checked ?? true;
+      const includeCadence = document.getElementById("includeCadence")?.checked ?? true;
+      const includeGaitData = document.getElementById("includeGaitData")?.checked ?? true;
       
       const res = await fetch("/api/generate-fit", {
         method: "POST",
@@ -1463,12 +1471,14 @@ async function generateFit() {
           points: routePoints,
           paceSecondsPerKm: filePaceSecondsPerKm,
           hrRest, hrMax, lapCount, variantIndex: i + 1,
-          weightKg, powerFactor, gpsDrift, avgCadence
+          weightKg, powerFactor, gpsDrift, avgCadence,
+          includeHeartRate, includePower, includeCadence, includeGaitData
         })
       });
       
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
+        hideGeneratingModal();
         updateMessage(err.error || "生成失败", true);
         return;
       }
@@ -1483,9 +1493,19 @@ async function generateFit() {
       a.remove();
       window.URL.revokeObjectURL(url);
     }
+    
+    updateGeneratingModal(
+      `已生成 ${exportCount} 个 FIT 文件`,
+      `请前往「Keep App → 我的 → 我的数据 → 运动数据同步 → 运动数据文件导入」选择文件上传<br><br>点击左上角图标可赞赏支持开源项目 😊`
+    );
     updateMessage(`已生成 ${exportCount} 个 FIT 文件并开始下载`);
+    
+    setTimeout(() => {
+      hideGeneratingModal();
+    }, 5000);
   } catch (e) {
     console.error(e);
+    hideGeneratingModal();
     updateMessage("请求失败，请稍后重试", true);
   }
 }
@@ -1633,6 +1653,66 @@ async function previewActivity() {
 }
 
 document.getElementById("previewBtn")?.addEventListener("click", previewActivity);
+
+function openSponsorModal() {
+  const modal = document.getElementById('sponsorModal');
+  if (modal) {
+    modal.classList.add('active');
+  }
+}
+
+function closeSponsorModal() {
+  const modal = document.getElementById('sponsorModal');
+  if (modal) {
+    modal.classList.remove('active');
+  }
+}
+
+document.getElementById('logoIcon')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  openSponsorModal();
+});
+
+document.getElementById('sponsorModal')?.addEventListener('click', (e) => {
+  if (e.target.id === 'sponsorModal') {
+    closeSponsorModal();
+  }
+});
+
+function showGeneratingModal(text = '正在生成 FIT 文件...') {
+  const modal = document.getElementById('generatingModal');
+  const textEl = document.getElementById('generatingText');
+  const hintEl = document.getElementById('generatingHint');
+  if (modal) {
+    modal.classList.add('active');
+    if (textEl) textEl.textContent = text;
+    if (hintEl) {
+      hintEl.style.display = 'none';
+    }
+  }
+}
+
+function updateGeneratingModal(text, hint = '') {
+  const textEl = document.getElementById('generatingText');
+  const hintEl = document.getElementById('generatingHint');
+  if (textEl) textEl.textContent = text;
+  if (hintEl) {
+    if (hint) {
+      hintEl.innerHTML = hint;
+      hintEl.style.display = 'block';
+    } else {
+      hintEl.style.display = 'none';
+    }
+  }
+}
+
+function hideGeneratingModal() {
+  const modal = document.getElementById('generatingModal');
+  if (modal) {
+    modal.classList.remove('active');
+  }
+}
 
 // ==================== 服务状态检测模块 ====================
 
