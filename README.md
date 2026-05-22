@@ -155,9 +155,10 @@ npm run deploy:workers
 
 ```bash
 cd TS-Hono
-npm run build:pages
-npx wrangler pages deploy dist
+npm run deploy:pages
 ```
+
+> 注意：`deploy:pages` 命令会先构建再部署。如需仅构建，使用 `npm run build:pages`。
 
 配置文件：`wrangler.toml`（wrangler 自动使用）
 
@@ -187,9 +188,9 @@ ALLOWED_ORIGINS = "https://your-domain.com"
 
 | 配置项 | 值 |
 | ------ | -- |
-| **构建命令** | `npm run deploy:pages` |
+| **构建命令** | `npm run build:pages` |
 | **根目录** | `TS-Hono` |
-| **输出目录** | `dist` |
+| **输出目录** | `dist-pages` |
 | **Framework preset** | **None** |
 
 ### 3. 环境变量
@@ -267,17 +268,26 @@ TS-Hono/
 | ------ | ------------------------------- | --------------------- |
 | `main` | `src/workers.ts` | - |
 | `[assets]` | 需要，静态资源托管 | - |
-| `pages_build_output_dir` | - | `dist-pages` |
+| `pages_build_output_dir` | - | `dist-pages`（仅构建时使用） |
 | `[vars]` | `ALLOWED_ORIGINS` | `ALLOWED_ORIGINS` |
+
+> 注意：Workers 使用 `wrangler.workers.toml`，Pages 使用 `wrangler.toml`。
 
 ### 可用命令
 
 | 命令 | 说明 |
 | ---- | ---- |
-| `npm start` | 启动本地 Node.js 服务器 |
-| `npm run dev` | Wrangler 本地开发 (Workers) |	
+| `npm start` | 启动本地 Node.js 服务器（端口 3000） |
+| `npm run dev` | Wrangler 本地开发（Workers 模式，端口 8787） |
+| `npm run dev:local` | 使用 tsx 启动本地开发服务器（端口 3000） |
+| `npm run build` | 构建 Workers 和 Pages 部署产物 |
+| `npm run build:workers` | 仅构建 Workers 部署产物（dry-run） |
+| `npm run build:pages` | 仅构建 Pages 部署产物 |
 | `npm run deploy:workers` | 部署到 Cloudflare Workers |
-| `npm run deploy:pages` | 构建 Pages 部署产物 |
+| `npm run deploy:pages` | 构建并部署到 Cloudflare Pages |
+| `npm run type-check` | TypeScript 类型检查 |
+| `npm run clean` | 清理构建产物（跨平台） |
+| `npm run clean:win` | Windows 专用清理命令（PowerShell） |
 
 ***
 

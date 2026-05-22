@@ -12,9 +12,10 @@
     "build:pages": "tsx build.pages.ts",
     "deploy": "npm run deploy:workers",
     "deploy:workers": "wrangler deploy --config wrangler.workers.toml",
-    "deploy:pages": "npm run build:pages",
+    "deploy:pages": "npm run build:pages && wrangler pages deploy dist-pages --project-name=fit-tool",
     "type-check": "tsc --noEmit",
-    "clean": "rm -rf dist-workers dist-pages node_modules"
+    "clean": "node -e \"const fs=require('fs');['dist-workers','dist-pages'].forEach(d=>{try{fs.rmSync(d,{recursive:true,force:true});}catch(e){}});\"",
+    "clean:win": "powershell -Command \"if(Test-Path dist-workers){Remove-Item -Recurse -Force dist-workers};if(Test-Path dist-pages){Remove-Item -Recurse -Force dist-pages}\""
   },
   "dependencies": {
     "@hono/node-server": "^1.13.8",
