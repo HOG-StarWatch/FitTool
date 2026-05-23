@@ -925,6 +925,7 @@ class ShapeManipulator {
     }
     updateDistanceInfo();
     updateRouteStatus();
+    updateRouteHash();
   }
 
   /**
@@ -939,6 +940,7 @@ class ShapeManipulator {
     // 从 polyline 获取的是当前地图坐标系的点，需要转换为 WGS84
     const rawLatLngs = this.polyline.getLatLngs();
     routePoints = rawLatLngs.map(p => CoordManager.toWGS84Point(p.lng, p.lat));
+    updateRouteHash();
   }
 }
 
@@ -1078,12 +1080,14 @@ function applySmoothing() {
   }
   
   routePoints = smoothed;
-  if (polyline) polyline.setLatLngs(routePoints);
+  const displayPoints = CoordManager.toMapDisplayArray(routePoints);
+  if (polyline) polyline.setLatLngs(displayPoints);
   if (routeEditor.active) routeEditor.renderMarkers();
   
   updateMessage(`轨迹已平滑，现有 ${routePoints.length} 个点`);
   updateDistanceInfo();
   updateRouteStatus();
+  updateRouteHash();
 }
 
 // ==================== 操作历史记录模块 ====================
@@ -1107,7 +1111,8 @@ function undo() {
   
   if (polyline) {
     map.removeLayer(polyline);
-    polyline = L.polyline(routePoints, { color: "#ff5722" }).addTo(map);
+    const displayPoints = CoordManager.toMapDisplayArray(routePoints);
+    polyline = L.polyline(displayPoints, { color: "#ff5722" }).addTo(map);
   }
   
   if (routeEditor.active) routeEditor.renderMarkers();
@@ -1116,6 +1121,7 @@ function undo() {
   updateMessage(`已撤销，剩余 ${historyStack.length} 步操作`);
   updateDistanceInfo();
   updateRouteStatus();
+  updateRouteHash();
 }
 
 // ==================== 路径保存加载模块 ====================
@@ -1161,6 +1167,7 @@ function loadRoute(routeName) {
   updateMessage(`已加载路径 "${routeName}"`);
   updateDistanceInfo();
   updateRouteStatus();
+  updateRouteHash();
 }
 
 function deleteRoute(routeName) {
@@ -1298,6 +1305,8 @@ map.on("click", (e) => {
 
   updateMessage(`已添加点数：${routePoints.length}`);
   updateDistanceInfo();
+  updateRouteStatus();
+  updateRouteHash();
 });
 
 function updateRouteStatus() {
@@ -1333,6 +1342,8 @@ function undoLastPoint() {
 }
 
 function clearRoute() {
+  if (routePoints.length === 0) return;
+  if (!confirm('确定要清空当前路线吗？')) return;
   pushHistory();
   routePoints = [];
   if (polyline) { map.removeLayer(polyline); polyline = null; }
@@ -1342,6 +1353,166 @@ function clearRoute() {
   updateMessage("轨迹已清空");
   updateDistanceInfo();
   updateRouteStatus();
+  updateRouteHash();
+}
+
+function closeRoute() {
+  if (routePoints.length < 2) { updateMessage('至少需要两个点才能闭合', true); return; }
+  const first = routePoints[0];
+  const last = routePoints[routePoints.length - 1];
+  const d = haversineDistance(first.lat, first.lng, last.lat, last.lng);
+  if (d < 10) { updateMessage('路线已经闭合'); return; }
+  pushHistory();
+  routePoints.push({ lat: first.lat, lng: first.lng });
+  const displayPoints = CoordManager.toMapDisplayArray(routePoints);
+  if (polyline) polyline.setLatLngs(displayPoints);
+  updateMessage('路线已闭合');
+  updateDistanceInfo();
+  updateRouteStatus();
+  updateRouteHash();
+}
+
+function encodePolylineValue(v) {
+  v = Math.round(v * 1e6);
+  v = v << 1;
+  if (v < 0) v = ~v;
+  let result = '';
+  while (v >= 0x20) {
+    result += String.fromCharCode((0x20 | (v & 0x1f)) + 63);
+    v >>= 5;
+  }
+  result += String.fromCharCode(v + 63);
+  return result;
+}
+
+function encodePolyline(points) {
+  let result = '';
+  let prevLat = 0, prevLng = 0;
+  for (const p of points) {
+    const dLat = Math.round(p.lat * 1e6) - prevLat;
+    const dLng = Math.round(p.lng * 1e6) - prevLng;
+    prevLat += dLat;
+    prevLng += dLng;
+    result += encodePolylineValue(dLat);
+    result += encodePolylineValue(dLng);
+  }
+  return 'E' + result;
+}
+
+function decodePolyline(encoded) {
+  const points = [];
+  let index = 1;
+  let prevLat = 0, prevLng = 0;
+  const len = encoded.length;
+  while (index < len) {
+    let shift = 0, byte = 0, result = 0;
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+    let lat = (result & 1) ? ~(result >> 1) : (result >> 1);
+    prevLat += lat;
+
+    shift = 0; byte = 0; result = 0;
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+    let lng = (result & 1) ? ~(result >> 1) : (result >> 1);
+    prevLng += lng;
+
+    points.push({ lat: prevLat / 1e6, lng: prevLng / 1e6 });
+  }
+  return points;
+}
+
+function updateRouteHash() {
+  if (routePoints.length > 0) {
+    history.replaceState(null, '', '#' + encodePolyline(routePoints));
+  } else if (window.location.hash) {
+    history.replaceState(null, '', window.location.pathname);
+  }
+}
+
+function loadRouteFromHash() {
+  const hash = window.location.hash.slice(1);
+  if (!hash) return;
+  try {
+    let points;
+    if (hash[0] === 'E') {
+      points = decodePolyline(hash);
+    } else {
+      points = JSON.parse(atob(hash));
+    }
+    if (Array.isArray(points) && points.length >= 2) {
+      routePoints = points;
+      const displayPoints = CoordManager.toMapDisplayArray(routePoints);
+      if (polyline) polyline.setLatLngs(displayPoints);
+      else polyline = L.polyline(displayPoints, { color: "#ff5722" }).addTo(map);
+      map.fitBounds(polyline.getBounds().pad(0.1));
+      updateMessage(`已加载 URL 中的路线（${points.length} 个点）`);
+      updateDistanceInfo();
+      updateRouteStatus();
+    }
+  } catch (e) { /* ignore invalid hash */ }
+}
+
+let isGenerating = false;
+
+function exportGPX() {
+  if (routePoints.length < 2) { updateMessage('请先绘制路线', true); return; }
+  let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1">\n  <trk><name>FitTool Route</name><trkseg>\n';
+  for (const p of routePoints) {
+    xml += `    <trkpt lat="${p.lat}" lon="${p.lng}"></trkpt>\n`;
+  }
+  xml += '  </trkseg></trk>\n</gpx>';
+  const blob = new Blob([xml], { type: 'application/gpx+xml' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'route.gpx';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  updateMessage('路线已导出为 GPX');
+}
+
+function importGPX(file) {
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const parser = new DOMParser();
+      const xml = parser.parseFromString(e.target.result, 'text/xml');
+      const parseError = xml.querySelector('parsererror');
+      if (parseError) { updateMessage('GPX 文件解析失败', true); return; }
+      const trkpts = xml.querySelectorAll('trkpt');
+      if (!trkpts.length) { updateMessage('GPX 文件中未找到轨迹点', true); return; }
+      const points = [];
+      trkpts.forEach(pt => {
+        const lat = parseFloat(pt.getAttribute('lat'));
+        const lon = parseFloat(pt.getAttribute('lon'));
+        if (!isNaN(lat) && !isNaN(lon)) points.push({ lat, lng: lon });
+      });
+      if (points.length < 2) { updateMessage(`GPX 文件有效轨迹点不足（${points.length}）`, true); return; }
+      pushHistory();
+      routePoints = points;
+      const displayPoints = CoordManager.toMapDisplayArray(routePoints);
+      if (polyline) polyline.setLatLngs(displayPoints);
+      else polyline = L.polyline(displayPoints, { color: "#ff5722" }).addTo(map);
+      map.fitBounds(polyline.getBounds().pad(0.1));
+      updateMessage(`已导入 ${points.length} 个轨迹点`);
+      updateDistanceInfo();
+      updateRouteStatus();
+      updateRouteHash();
+    } catch (err) {
+      updateMessage('导入 GPX 失败: ' + err.message, true);
+    }
+  };
+  reader.onerror = () => updateMessage('文件读取失败', true);
+  reader.readAsText(file);
 }
 
 function calculateLapsByDistance() {
@@ -1368,9 +1539,15 @@ function calculateLapsByDistance() {
 
 document.getElementById('undoBtn')?.addEventListener('click', undo);
 document.getElementById('clearRoute')?.addEventListener('click', clearRoute);
+document.getElementById('closeRouteBtn')?.addEventListener('click', closeRoute);
 document.getElementById('calculateLapsBtn')?.addEventListener('click', calculateLapsByDistance);
 document.getElementById('smoothBtn')?.addEventListener('click', applySmoothing);
 document.getElementById('lapCount')?.addEventListener('input', updateDistanceInfo);
+document.getElementById('exportGpxBtn')?.addEventListener('click', exportGPX);
+document.getElementById('importGpxBtn')?.addEventListener('click', () => document.getElementById('gpxFileInput')?.click());
+document.getElementById('gpxFileInput')?.addEventListener('change', (e) => {
+  if (e.target.files && e.target.files[0]) { importGPX(e.target.files[0]); e.target.value = ''; }
+});
 
 function dateToLocalInputValue(d) {
   const tzOffset = d.getTimezoneOffset();
@@ -1413,6 +1590,7 @@ async function generateFit() {
     updateMessage("请至少在地图上选择两个点形成轨迹", true);
     return;
   }
+  if (isGenerating) return;
   
   const hrRest = parseInt(document.getElementById("hrRest")?.value) || 60;
   const hrMax = parseInt(document.getElementById("hrMax")?.value) || 180;
@@ -1431,27 +1609,42 @@ async function generateFit() {
     return;
   }
   
+  isGenerating = true;
+  document.getElementById("generateFit").disabled = true;
+  document.getElementById("previewBtn").disabled = true;
+  
   showGeneratingModal('正在生成 FIT 文件...');
+  
+  const tzOffset = -new Date().getTimezoneOffset();
+  const tzSign = tzOffset >= 0 ? '+' : '-';
+  const tzHours = String(Math.floor(Math.abs(tzOffset) / 60)).padStart(2, '0');
+  const tzMins = String(Math.abs(tzOffset) % 60).padStart(2, '0');
+  const tzSuffix = `${tzSign}${tzHours}:${tzMins}`;
+  
+  let successCount = 0;
+  let failCount = 0;
+  let lastError = '';
   
   try {
     for (let i = 0; i < exportCount; i++) {
       updateGeneratingModal(`正在生成第 ${i + 1}/${exportCount} 个 FIT 文件...`);
       
-      const fileStart = new Date(timeInputs[i]?.value);
-      if (Number.isNaN(fileStart.getTime())) {
-        hideGeneratingModal();
-        updateMessage(`请为第 ${i + 1} 份设置开始时间`, true);
-        return;
+      const inputVal = timeInputs[i]?.value;
+      if (!inputVal || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(inputVal)) {
+        failCount++;
+        lastError = `第 ${i + 1} 份开始时间无效`;
+        continue;
       }
+      const startTime = `${inputVal}:00${tzSuffix}`;
       
       const pm = parseFloat(paceMinInputs[i]?.value) || 0;
       const ps = parseFloat(paceSecInputs[i]?.value) || 0;
       const filePaceSecondsPerKm = pm * 60 + ps;
       
       if (!filePaceSecondsPerKm || filePaceSecondsPerKm <= 0) {
-        hideGeneratingModal();
-        updateMessage(`第 ${i + 1} 份的配速无效`, true);
-        return;
+        failCount++;
+        lastError = `第 ${i + 1} 分配速无效`;
+        continue;
       }
       
       const weightKg = Number(document.getElementById("weightInput")?.value) || 65;
@@ -1463,50 +1656,68 @@ async function generateFit() {
       const includeCadence = document.getElementById("includeCadence")?.checked ?? true;
       const includeGaitData = document.getElementById("includeGaitData")?.checked ?? true;
       
-      const res = await fetch("/api/generate-fit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          startTime: fileStart.toISOString(),
-          points: routePoints,
-          paceSecondsPerKm: filePaceSecondsPerKm,
-          hrRest, hrMax, lapCount, variantIndex: i + 1,
-          weightKg, powerFactor, gpsDrift, avgCadence,
-          includeHeartRate, includePower, includeCadence, includeGaitData
-        })
-      });
-      
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        hideGeneratingModal();
-        updateMessage(err.error || "生成失败", true);
-        return;
+      try {
+        const res = await fetch("/api/generate-fit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            startTime,
+            points: routePoints,
+            paceSecondsPerKm: filePaceSecondsPerKm,
+            hrRest, hrMax, lapCount, variantIndex: i + 1,
+            weightKg, powerFactor, gpsDrift, avgCadence,
+            includeHeartRate, includePower, includeCadence, includeGaitData
+          })
+        });
+        
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          failCount++;
+          lastError = err.error || `第 ${i + 1} 份生成失败`;
+          continue;
+        }
+        
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = exportCount > 1 ? `run_${i + 1}.fit` : "run.fit";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+        successCount++;
+      } catch (e) {
+        failCount++;
+        lastError = `第 ${i + 1} 份请求异常: ${e.message}`;
       }
-      
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = exportCount > 1 ? `run_${i + 1}.fit` : "run.fit";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
     }
     
-    updateGeneratingModal(
-      `已生成 ${exportCount} 个 FIT 文件`,
-      `请前往「Keep App → 我的 → 我的数据 → 运动数据同步 → 运动数据文件导入」选择文件上传<br><br>点击左上角图标可赞赏支持开源项目 😊`
-    );
-    updateMessage(`已生成 ${exportCount} 个 FIT 文件并开始下载`);
+    const summary = successCount > 0
+      ? `已生成 ${successCount} 个 FIT 文件${failCount > 0 ? `，${failCount} 个失败` : ''}`
+      : `生成失败${lastError ? '：' + lastError : ''}`;
     
-    setTimeout(() => {
-      hideGeneratingModal();
-    }, 5000);
-  } catch (e) {
-    console.error(e);
-    hideGeneratingModal();
-    updateMessage("请求失败，请稍后重试", true);
+    updateGeneratingModal(
+      summary,
+      failCount === 0
+        ? `请前往「Keep App → 我的 → 我的数据 → 运动数据同步 → 运动数据文件导入」选择文件上传<br><br>点击左上角图标可赞赏支持开源项目 😊`
+        : lastError
+    );
+    updateMessage(summary);
+    
+    if (successCount > 0) {
+      setTimeout(() => {
+        hideGeneratingModal();
+      }, 5000);
+    } else {
+      setTimeout(() => {
+        hideGeneratingModal();
+      }, 2000);
+    }
+  } finally {
+    isGenerating = false;
+    document.getElementById("generateFit").disabled = false;
+    document.getElementById("previewBtn").disabled = false;
   }
 }
 
@@ -1515,6 +1726,7 @@ document.getElementById("exportCount")?.addEventListener("input", rebuildExportT
 
 updateDistanceInfo();
 rebuildExportTimes();
+loadRouteFromHash();
 
 // ==================== 运动预览功能模块 ====================
 
@@ -1566,6 +1778,7 @@ async function previewActivity() {
     updateMessage("请至少在地图上选择两个点形成轨迹", true);
     return;
   }
+  if (isGenerating) return;
   
   const timeInputs = document.querySelectorAll(".export-time-input");
   const paceMinInputs = document.querySelectorAll(".export-pace-min");
@@ -1579,11 +1792,16 @@ async function previewActivity() {
   const firstTimeInput = timeInputs[0];
   if (!firstTimeInput?.value) firstTimeInput.value = dateToLocalInputValue(new Date());
   
-  const start = new Date(firstTimeInput.value);
-  if (Number.isNaN(start.getTime())) {
+  const inputVal = firstTimeInput.value;
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(inputVal)) {
     updateMessage("开始时间无效", true);
     return;
   }
+  const tzOffset = -new Date().getTimezoneOffset();
+  const tzSign = tzOffset >= 0 ? '+' : '-';
+  const tzHours = String(Math.floor(Math.abs(tzOffset) / 60)).padStart(2, '0');
+  const tzMins = String(Math.abs(tzOffset) % 60).padStart(2, '0');
+  const startTime = `${inputVal}:00${tzSign}${tzHours}:${tzMins}`;
   
   const pm = parseFloat(paceMinInputs[0]?.value) || 0;
   const ps = parseFloat(paceSecInputs[0]?.value) || 0;
@@ -1602,6 +1820,10 @@ async function previewActivity() {
   const gpsDrift = parseFloat(document.getElementById("gpsDrift")?.value) || 0;
   const avgCadence = parseInt(document.getElementById("avgCadence")?.value) || 170;
   
+  isGenerating = true;
+  document.getElementById("generateFit").disabled = true;
+  document.getElementById("previewBtn").disabled = true;
+  
   updateMessage("正在生成预览...");
   
   try {
@@ -1609,7 +1831,7 @@ async function previewActivity() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        startTime: start.toISOString(),
+        startTime,
         points: routePoints,
         paceSecondsPerKm, hrRest, hrMax, lapCount,
         weightKg, powerFactor, gpsDrift, avgCadence
@@ -1649,6 +1871,10 @@ async function previewActivity() {
   } catch (e) {
     console.error(e);
     updateMessage("预览请求失败", true);
+  } finally {
+    isGenerating = false;
+    document.getElementById("generateFit").disabled = false;
+    document.getElementById("previewBtn").disabled = false;
   }
 }
 

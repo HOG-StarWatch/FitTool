@@ -1,4 +1,5 @@
 import { FitEncoder, toSemicircles } from './fit';
+import type { RecordData } from './fit';
 
 export const MAX_POINTS = 10000;
 export const ROUTE_CLOSURE_THRESHOLD_METERS = 5;
@@ -59,9 +60,14 @@ export interface RequestBody {
   powerFactor?: number;
   gpsDrift?: number;
   avgCadence?: number;
+  includeHeartRate?: boolean;
+  includePower?: boolean;
+  includeCadence?: boolean;
+  includeGaitData?: boolean;
 }
 
 export { FitEncoder, toSemicircles };
+export type { RecordData };
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -158,8 +164,8 @@ function computeSamples(
   powerFactor: number
 ): ComputeSamplesResult {
   const totalDistanceKm = totalDist / 1000;
-  const totalDurationSec = totalDistanceKm * paceSecondsPerKm;
-  const avgSpeedTarget = totalDist / totalDurationSec;
+  const totalDurationEstimate = totalDistanceKm * paceSecondsPerKm;
+  const avgSpeedTarget = totalDist / totalDurationEstimate;
   const n = allPoints.length;
 
   const baseSpeedFactor = 0.98 + Math.random() * 0.06;
@@ -186,8 +192,6 @@ function computeSamples(
     const speedRaw = avgSpeedTarget * baseSpeedFactor * (1 + longWave + shortWave);
     instSpeedRaw[i] = speedRaw;
 
-    const effort = Math.min(1, Math.max(0.3, speedRaw / (avgSpeedTarget || 1e-6)));
-
     let intensityTarget: number;
     if (frac < 0.1) {
       const f = frac / 0.1;
@@ -200,7 +204,7 @@ function computeSamples(
       intensityTarget = 0.82 + 0.15 * f;
     }
 
-    const intensity = Math.min(1, Math.max(0, 0.7 * intensityTarget + 0.3 * effort));
+    const intensity = Math.min(1, Math.max(0, 0.7 * intensityTarget + 0.3 * Math.min(1, Math.max(0.3, speedRaw / (avgSpeedTarget || 1e-6)))));
     const hrTarget = hrRestVal + (hrMaxVal - hrRestVal) * intensity;
 
     if (accumulatedTime < WARMUP_DURATION_SEC) {
@@ -237,7 +241,7 @@ function computeSamples(
     rawDuration += dt;
   }
 
-  const scale = rawDuration > 0 ? totalDurationSec / rawDuration : 1;
+  const scale = rawDuration > 0 ? totalDurationEstimate / rawDuration : 1;
 
   const samples: SampleData[] = [];
   let t = 0;
@@ -260,7 +264,7 @@ function computeSamples(
     });
   }
 
-  const computedTotalDurationSec = samples.length ? samples[samples.length - 1].timeSec : totalDurationSec;
+  const computedTotalDurationSec = samples.length ? samples[samples.length - 1].timeSec : totalDurationEstimate;
   return { samples, totalDurationSec: computedTotalDurationSec };
 }
 
@@ -368,8 +372,17 @@ export function processRouteRequest(body: RequestBody): { error: string } | Proc
   };
 }
 
-export function generateFitFile(result: ProcessedRoute): Response {
+export function generateFitFile(result: ProcessedRoute, sensorOptions?: {
+  includeHeartRate?: boolean;
+  includePower?: boolean;
+  includeCadence?: boolean;
+  includeGaitData?: boolean;
+}): Response {
   const { startDate, totalDist, totalDurationSec, hrMaxVal, variant, samples, calories } = result;
+  const includeHeartRate = sensorOptions?.includeHeartRate !== false;
+  const includePower = sensorOptions?.includePower !== false;
+  const includeCadence = sensorOptions?.includeCadence !== false;
+  const includeGaitData = sensorOptions?.includeGaitData !== false;
   const avgSpeed = totalDist / totalDurationSec;
 
   let totalPower = 0;
@@ -401,21 +414,26 @@ export function generateFitFile(result: ProcessedRoute): Response {
 
   for (const s of samples) {
     const timestamp = new Date(startDate.getTime() + s.timeSec * 1000);
-    encoder.writeRecordMessage({
+    const record: RecordData = {
       timestamp,
       positionLat: toSemicircles(s.lat),
       positionLong: toSemicircles(s.lng),
       distance: s.distance,
       speed: s.speed,
-      heartRate: s.heartRate,
-      cadence: Math.round(s.cadence / 2),
-      power: s.power,
       enhancedSpeed: s.speed,
-      stanceTime: s.groundTime,
-      stanceTimePercent: clamp((s.groundTime / (s.groundTime + s.flightTime)) * 100, 40, 70),
-      verticalOscillation: s.verticalOscillation,
-      stepLength: (s.speed * 1000) / (s.cadence / 60) / 100,
-    });
+    };
+
+    if (includeHeartRate) record.heartRate = s.heartRate;
+    if (includeCadence) record.cadence = Math.round(s.cadence / 2);
+    if (includePower) record.power = s.power;
+    if (includeGaitData) {
+      record.stanceTime = s.groundTime;
+      record.stanceTimePercent = clamp((s.groundTime / (s.groundTime + s.flightTime)) * 100, 40, 70);
+      record.verticalOscillation = s.verticalOscillation;
+      record.stepLength = (s.speed * 1000) / (s.cadence / 60) / 100;
+    }
+
+    encoder.writeRecordMessage(record);
   }
 
   encoder.writeLapMessage({
@@ -428,11 +446,11 @@ export function generateFitFile(result: ProcessedRoute): Response {
     sport: 'running',
     subSport: 'generic',
     avgSpeed,
-    avgHeartRate: avgHr,
-    maxHeartRate: hrMaxVal,
-    avgCadence: Math.round(calculatedAvgCadence / 2),
-    avgPower,
-  });
+    avgHeartRate: includeHeartRate ? avgHr : 0,
+    maxHeartRate: includeHeartRate ? hrMaxVal : 0,
+    avgCadence: includeCadence ? Math.round(calculatedAvgCadence / 2) : 0,
+    avgPower: includePower ? avgPower : 0,
+  }, includeHeartRate, includePower, includeCadence);
 
   encoder.writeSessionMessage({
     timestamp: sessionEnd,
@@ -444,11 +462,11 @@ export function generateFitFile(result: ProcessedRoute): Response {
     sport: 'running',
     subSport: 'generic',
     avgSpeed,
-    avgHeartRate: avgHr,
-    maxHeartRate: hrMaxVal,
-    avgCadence: Math.round(calculatedAvgCadence / 2),
-    avgPower,
-  });
+    avgHeartRate: includeHeartRate ? avgHr : 0,
+    maxHeartRate: includeHeartRate ? hrMaxVal : 0,
+    avgCadence: includeCadence ? Math.round(calculatedAvgCadence / 2) : 0,
+    avgPower: includePower ? avgPower : 0,
+  }, includeHeartRate, includePower, includeCadence);
 
   encoder.writeActivityMessage({
     timestamp: sessionEnd,

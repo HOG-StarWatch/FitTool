@@ -35,10 +35,10 @@ export const rateLimit: MiddlewareHandler = async (c, next) => {
   
   rateLimitStore.set(cacheKey, { count: current.count + 1, resetTime: current.resetTime });
   
-  c.res.headers.set('X-RateLimit-Limit', String(RATE_LIMIT));
-  c.res.headers.set('X-RateLimit-Remaining', String(RATE_LIMIT - current.count - 1));
-  c.res.headers.set('X-RateLimit-Reset', String(Math.ceil(current.resetTime / 1000)));
-  
+  c.header('X-RateLimit-Limit', String(RATE_LIMIT));
+  c.header('X-RateLimit-Remaining', String(RATE_LIMIT - current.count - 1));
+  c.header('X-RateLimit-Reset', String(Math.ceil(current.resetTime / 1000)));
+
   await next();
 };
 

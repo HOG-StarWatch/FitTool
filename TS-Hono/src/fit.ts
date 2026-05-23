@@ -259,7 +259,7 @@ export class FitEncoder {
     this.writeDataMessage(MESG_NUM['device_info'], fields);
   }
 
-  writeSessionMessage(data: SessionData): void {
+  writeSessionMessage(data: SessionData, includeHeartRate = true, includePower = true, includeCadence = true): void {
     const fields: Array<{ num: number; value: number }> = [
       { num: 253, value: this.getDateValue(data.timestamp) },
       { num: 2, value: this.getDateValue(data.startTime) },
@@ -270,17 +270,20 @@ export class FitEncoder {
       { num: 9, value: Math.round(data.totalDistance * 100) },
       { num: 11, value: data.totalCalories },
       { num: 14, value: Math.round(data.avgSpeed * 1000) },
-      { num: 16, value: Math.round(data.avgHeartRate) },
-      { num: 17, value: Math.round(data.maxHeartRate) },
-      { num: 18, value: Math.round(data.avgCadence) },
-      { num: 20, value: Math.round(data.avgPower) },
     ];
+
+    if (includeHeartRate) {
+      fields.push({ num: 16, value: Math.round(data.avgHeartRate) });
+      fields.push({ num: 17, value: Math.round(data.maxHeartRate) });
+    }
+    if (includeCadence) fields.push({ num: 18, value: Math.round(data.avgCadence) });
+    if (includePower) fields.push({ num: 20, value: Math.round(data.avgPower) });
 
     this.writeDefinitionMessage(MESG_NUM['session'], 'session', fields, true);
     this.writeDataMessage(MESG_NUM['session'], fields);
   }
 
-  writeLapMessage(data: LapData): void {
+  writeLapMessage(data: LapData, includeHeartRate = true, includePower = true, includeCadence = true): void {
     const fields: Array<{ num: number; value: number }> = [
       { num: 253, value: this.getDateValue(data.timestamp) },
       { num: 2, value: this.getDateValue(data.startTime) },
@@ -289,13 +292,16 @@ export class FitEncoder {
       { num: 9, value: Math.round(data.totalDistance * 100) },
       { num: 11, value: data.totalCalories },
       { num: 13, value: Math.round(data.avgSpeed * 1000) },
-      { num: 15, value: Math.round(data.avgHeartRate) },
-      { num: 16, value: Math.round(data.maxHeartRate) },
-      { num: 17, value: Math.round(data.avgCadence) },
-      { num: 19, value: Math.round(data.avgPower) },
       { num: 25, value: SPORT_MAP[data.sport] || 1 },
       { num: 39, value: data.subSport === 'generic' ? 0 : SPORT_MAP[data.subSport] || 0 },
     ];
+
+    if (includeHeartRate) {
+      fields.push({ num: 15, value: Math.round(data.avgHeartRate) });
+      fields.push({ num: 16, value: Math.round(data.maxHeartRate) });
+    }
+    if (includeCadence) fields.push({ num: 17, value: Math.round(data.avgCadence) });
+    if (includePower) fields.push({ num: 19, value: Math.round(data.avgPower) });
 
     this.writeDefinitionMessage(MESG_NUM['lap'], 'lap', fields, true);
     this.writeDataMessage(MESG_NUM['lap'], fields);

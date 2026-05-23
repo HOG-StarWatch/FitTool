@@ -3,6 +3,7 @@ import { cors } from 'hono/cors';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { processRouteRequest, generateFitFile, RequestBody } from './src/lib';
+import { version } from './package.json';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
@@ -20,9 +21,25 @@ app.use('/api/*', async (c, next) => {
     if (originList.includes('*')) {
       return cors()(c, next);
     }
-    return cors({ origin: originList, allowMethods: ['POST', 'OPTIONS'], allowHeaders: ['Content-Type'], maxAge: 86400 })(c, next);
+    return cors({ origin: originList, allowMethods: ['POST', 'OPTIONS', 'GET'], allowHeaders: ['Content-Type'], maxAge: 86400 })(c, next);
   }
   await next();
+});
+
+app.get('/api/health', async (c) => {
+  return c.json({
+    status: 'ok',
+    timestamp: Date.now(),
+    uptime: process.uptime(),
+  });
+});
+
+app.get('/api/status', async (c) => {
+  return c.json({
+    status: 'available',
+    service: 'fit-tool',
+    version,
+  });
 });
 
 app.post('/api/preview', async (c) => {
@@ -48,7 +65,13 @@ app.post('/api/generate-fit', async (c) => {
     const body = await c.req.json<RequestBody>();
     const result = processRouteRequest(body || {});
     if ('error' in result) return c.json({ error: result.error }, 400);
-    return generateFitFile(result);
+    const sensorOptions = {
+      includeHeartRate: body.includeHeartRate !== false,
+      includePower: body.includePower !== false,
+      includeCadence: body.includeCadence !== false,
+      includeGaitData: body.includeGaitData !== false,
+    };
+    return generateFitFile(result, sensorOptions);
   } catch (e) {
     console.error(e);
     return c.json({ error: '生成 FIT 文件失败' }, 500);

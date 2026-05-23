@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { processRouteRequest, generateFitFile, RequestBody } from './lib';
 import { rateLimit, getRateLimitStats } from './middleware/rate-limit';
+import { version } from '../package.json';
 
 type Bindings = {
   ALLOWED_ORIGINS?: string;
@@ -51,7 +52,7 @@ app.get('/api/status', async (c) => {
   return c.json({
     status: 'available',
     service: 'fit-tool',
-    version: '1.6.0',
+    version,
     rateLimit: {
       used: stats.used,
       remaining: stats.remaining,
@@ -84,7 +85,13 @@ app.post('/api/generate-fit', async (c) => {
     const body = await c.req.json<RequestBody>();
     const result = processRouteRequest(body || {});
     if ('error' in result) return c.json({ error: result.error }, 400);
-    return generateFitFile(result);
+    const sensorOptions = {
+      includeHeartRate: body.includeHeartRate !== false,
+      includePower: body.includePower !== false,
+      includeCadence: body.includeCadence !== false,
+      includeGaitData: body.includeGaitData !== false,
+    };
+    return generateFitFile(result, sensorOptions);
   } catch (e) {
     console.error(e);
     return c.json({ error: '生成 FIT 文件失败' }, 500);
