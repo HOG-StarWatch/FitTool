@@ -296,7 +296,7 @@ export function processRouteRequest(body: RequestBody): { error: string } | Proc
     return { error: 'startTime 格式不正确' };
   }
 
-  const weight = (Number.isFinite(Number(weightKg)) && weightKg! > MIN_WEIGHT_KG && weightKg! < MAX_WEIGHT_KG)
+  const weight = (Number.isFinite(Number(weightKg)) && (weightKg ?? 0) > MIN_WEIGHT_KG && (weightKg ?? 0) < MAX_WEIGHT_KG)
     ? Number(weightKg) : DEFAULT_WEIGHT_KG;
   const power = (Number.isFinite(Number(powerFactor)) && (powerFactor ?? 0) > 0)
     ? Number(powerFactor) : DEFAULT_POWER_FACTOR;
@@ -372,6 +372,28 @@ export function processRouteRequest(body: RequestBody): { error: string } | Proc
   };
 }
 
+export function applySensorOptions(samples: SampleData[], options?: {
+  includeHeartRate?: boolean;
+  includePower?: boolean;
+  includeCadence?: boolean;
+  includeGaitData?: boolean;
+}): SampleData[] {
+  const hr = options?.includeHeartRate !== false;
+  const power = options?.includePower !== false;
+  const cadence = options?.includeCadence !== false;
+  const gait = options?.includeGaitData !== false;
+  if (hr && power && cadence && gait) return samples;
+  return samples.map(s => ({
+    ...s,
+    heartRate: hr ? s.heartRate : 0,
+    power: power ? s.power : 0,
+    cadence: cadence ? s.cadence : 0,
+    groundTime: gait ? s.groundTime : 0,
+    flightTime: gait ? s.flightTime : 0,
+    verticalOscillation: gait ? s.verticalOscillation : 0,
+  }));
+}
+
 export function generateFitFile(result: ProcessedRoute, sensorOptions?: {
   includeHeartRate?: boolean;
   includePower?: boolean;
@@ -383,7 +405,7 @@ export function generateFitFile(result: ProcessedRoute, sensorOptions?: {
   const includePower = sensorOptions?.includePower !== false;
   const includeCadence = sensorOptions?.includeCadence !== false;
   const includeGaitData = sensorOptions?.includeGaitData !== false;
-  const avgSpeed = totalDist / totalDurationSec;
+  const avgSpeed = totalDurationSec > 0 ? totalDist / totalDurationSec : 0;
 
   let totalPower = 0;
   let totalCadence = 0;

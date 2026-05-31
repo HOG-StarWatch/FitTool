@@ -16,13 +16,13 @@
       <div class="sidebar">
         <div class="sidebar-header">
           <div class="logo-container">
-            <img src="./HOG_S_64.png" alt="Logo" class="logo-icon" id="logoIcon" style="cursor: pointer;">
+            <img src="./HOG_S_64.png" alt="" class="logo-icon" id="logoIcon" style="cursor: pointer;">
           </div>
           <h1>Keep 校园跑</h1>
           <div class="theme-selector">
-            <button class="theme-selector-btn" data-theme="light" title="浅色主题"></button>
-            <button class="theme-selector-btn" data-theme="dark" title="深紫暗黑"></button>
-            <button class="theme-selector-btn" data-theme="glass" title="紫色玻璃"></button>
+            <button class="theme-selector-btn" data-theme="light" title="浅色" aria-label="浅色主题"></button>
+            <button class="theme-selector-btn" data-theme="dark" title="深色" aria-label="深色主题"></button>
+            <button class="theme-selector-btn" data-theme="glass" title="毛玻璃" aria-label="毛玻璃主题"></button>
           </div>
           <div id="serviceStatus" class="service-status" title="点击刷新服务状态">
             <span class="status-dot"></span>
@@ -32,9 +32,9 @@
 
       <div class="card collapsible">
         <div class="card-header" onclick="toggleCard(this)">
-          <span class="card-icon">🗺️</span>
+          <span class="card-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></span>
           <span>地图设置</span>
-          <span class="collapse-icon">▼</span>
+          <span class="collapse-icon"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></span>
         </div>
         <div class="card-body">
           <select id="mapSourceSelect" class="styled-select">
@@ -66,23 +66,24 @@
             </optgroup>
           </select>
           <div id="tiandituKeyContainer" class="tianditu-key-box">
+            <label for="tiandituKeyInput" class="sr-only">天地图 Key</label>
             <input type="text" id="tiandituKeyInput" placeholder="天地图 Key" value="fc97d01c0e3e98289295da844e1f2dad">
             <a href="https://www.bilibili.com/video/BV1FhVhz6EEh/" target="_blank" class="key-link">申请教程</a>
           </div>
           <div class="search-box">
-            <input type="text" id="searchInput" placeholder="搜索位置..." onkeypress="if(event.keyCode===13)searchLocation()">
-            <button class="btn-icon" onclick="searchLocation()">🔍</button>
+            <input type="text" id="searchInput" placeholder="搜索位置..." aria-label="搜索位置" onkeydown="if(event.key==='Enter')searchLocation()">
+            <button class="btn-icon" onclick="searchLocation()" aria-label="搜索"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></button>
           </div>
           <div id="searchResult" class="search-result"></div>
-          <button id="getLocationBtn" class="btn-location">📍 获取位置</button>
+          <button id="getLocationBtn" class="btn-location"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> 获取位置</button>
         </div>
       </div>
 
       <div class="card collapsible">
         <div class="card-header" onclick="toggleCard(this)">
-          <span class="card-icon">✏️</span>
+          <span class="card-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></span>
           <span>绘制工具</span>
-          <span class="collapse-icon">▼</span>
+          <span class="collapse-icon"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></span>
         </div>
         <div class="card-body">
           <div class="mode-switch">
@@ -121,23 +122,23 @@
 
       <div class="card collapsible">
         <div class="card-header" onclick="toggleCard(this)">
-          <span class="card-icon">📍</span>
+          <span class="card-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></span>
           <span>当前路线</span>
           <span id="routeStatus" class="route-status">未绘制</span>
-          <span class="collapse-icon">▼</span>
+          <span class="collapse-icon"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></span>
         </div>
         <div class="card-body">
           <div id="distanceInfo" class="distance-display">0.00 km</div>
           <div class="route-actions">
-            <button id="undoBtn" class="btn-secondary">↩️ 回退</button>
-            <button id="closeRouteBtn" class="btn-secondary">🔗 闭合</button>
-            <button id="clearRoute" class="btn-secondary">🗑️ 清空</button>
-            <button id="saveRouteBtn" class="btn-secondary">💾 保存</button>
-            <button id="smoothBtn" class="btn-accent">✨ 平滑</button>
+            <button id="undoBtn" class="btn-secondary"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10h13a4 4 0 0 1 0 8H7"/><path d="M7 6l-4 4 4 4"/></svg> 回退</button>
+            <button id="closeRouteBtn" class="btn-secondary"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20"/><path d="M2 12h20"/></svg> 闭合</button>
+            <button id="clearRoute" class="btn-secondary"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg> 清空</button>
+            <button id="saveRouteBtn" class="btn-secondary"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg> 保存</button>
+            <button id="smoothBtn" class="btn-secondary" style="background:transparent;border-color:var(--accent);color:var(--accent)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 16l4-8 4 4 4-6"/></svg> 平滑</button>
           </div>
           <div class="route-actions" style="margin-top:6px">
-            <button id="exportGpxBtn" class="btn-secondary">🌐 导出 GPX</button>
-            <button id="importGpxBtn" class="btn-secondary">📂 导入 GPX</button>
+            <button id="exportGpxBtn" class="btn-secondary"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> 导出 GPX</button>
+            <button id="importGpxBtn" class="btn-secondary"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> 导入 GPX</button>
             <input type="file" id="gpxFileInput" accept=".gpx,.xml" style="display:none">
           </div>
           
@@ -159,9 +160,9 @@
 
       <div class="card collapsible">
         <div class="card-header" onclick="toggleCard(this)">
-          <span class="card-icon">⚙️</span>
+          <span class="card-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
           <span>运动参数</span>
-          <span class="collapse-icon">▼</span>
+          <span class="collapse-icon"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></span>
         </div>
         <div class="card-body">
           <div class="param-grid">
@@ -197,25 +198,32 @@
 
       <div class="card collapsible">
         <div class="card-header" onclick="toggleCard(this)">
-          <span class="card-icon">📤</span>
+          <span class="card-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
           <span>导出设置</span>
-          <span class="collapse-icon">▼</span>
+          <span class="collapse-icon"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></span>
         </div>
         <div class="card-body">
           <div class="export-count">
             <label>导出份数</label>
             <input type="number" id="exportCount" value="1" min="1" max="10">
           </div>
+          <div class="zip-option">
+            <label class="checkbox-label">
+              <input type="checkbox" id="zipPackCheck" checked>
+              <span class="checkbox-custom"></span>
+              <span>多份打包为 ZIP</span>
+            </label>
+          </div>
           <div class="export-options">
             <p class="options-title">传感器数据</p>
             <div class="checkbox-grid">
               <label class="checkbox-label">
-                <input type="checkbox" id="includeHeartRate" checked>
+                <input type="checkbox" id="includeHeartRate">
                 <span class="checkbox-custom"></span>
                 <span>心率</span>
               </label>
               <label class="checkbox-label">
-                <input type="checkbox" id="includePower" checked>
+                <input type="checkbox" id="includePower">
                 <span class="checkbox-custom"></span>
                 <span>功率</span>
               </label>
@@ -236,9 +244,9 @@
       </div>
 
       <div class="action-buttons">
-        <button id="generateFit" class="btn-generate">⚡ 生成 FIT 文件</button>
-        <button id="previewBtn" class="btn-preview">📊 预览曲线</button>
-        <button id="getLocationBtnMobile" class="btn-location" style="display: none;">📍 定位</button>
+        <button id="generateFit" class="btn-generate"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> 生成 FIT 文件</button>
+        <button id="previewBtn" class="btn-preview"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> 预览曲线</button>
+        <button id="getLocationBtnMobile" class="btn-location" style="display: none;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> 定位</button>
       </div>
 
       <div id="message" class="message"></div>
@@ -252,6 +260,22 @@
           <h3>心率 bpm</h3>
           <canvas id="hrChart"></canvas>
         </div>
+        <div id="previewStats" class="preview-stats" style="display:none">
+          <div class="stats-grid">
+            <div class="stat-item"><span class="stat-label">总距离</span><span class="stat-value" id="statDistance">-</span></div>
+            <div class="stat-item"><span class="stat-label">总时长</span><span class="stat-value" id="statDuration">-</span></div>
+            <div class="stat-item"><span class="stat-label">平均配速</span><span class="stat-value" id="statPace">-</span></div>
+            <div class="stat-item"><span class="stat-label">卡路里</span><span class="stat-value" id="statCalories">-</span></div>
+            <div class="stat-item"><span class="stat-label">平均心率</span><span class="stat-value" id="statHr">-</span></div>
+            <div class="stat-item"><span class="stat-label">平均步频</span><span class="stat-value" id="statCadence">-</span></div>
+            <div class="stat-item"><span class="stat-label">平均功率</span><span class="stat-value" id="statPower">-</span></div>
+            <div class="stat-item"><span class="stat-label">平均步幅</span><span class="stat-value" id="statStride">-</span></div>
+            <div class="stat-item"><span class="stat-label">触地时间</span><span class="stat-value" id="statGroundTime">-</span></div>
+            <div class="stat-item"><span class="stat-label">腾空时间</span><span class="stat-value" id="statFlightTime">-</span></div>
+            <div class="stat-item"><span class="stat-label">垂直振幅</span><span class="stat-value" id="statVertOsc">-</span></div>
+            <div class="stat-item"><span class="stat-label">运动负荷</span><span class="stat-value" id="statLoad">-</span></div>
+          </div>
+        </div>
       </div>
 
       <div id="liveInfo" class="live-info"></div>
@@ -264,7 +288,7 @@
     <div class="modal-content">
       <div class="modal-header">
         <h3>赞赏支持</h3>
-        <button class="modal-close" onclick="closeSponsorModal()">×</button>
+        <button class="modal-close" onclick="closeSponsorModal()" aria-label="关闭">×</button>
       </div>
       <div class="modal-body">
         <p class="sponsor-tip">如果您觉得这个项目对您有帮助，欢迎赞赏支持</p>
@@ -295,7 +319,9 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
           crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"
+          crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"
           crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="./main.js"></script>
 </body>

@@ -41,12 +41,7 @@ function applyTheme(theme) {
     btn.classList.toggle('active', btn.dataset.theme === theme);
   });
   
-  if (theme === 'light') {
-    document.documentElement.removeAttribute('data-theme');
-    document.body.classList.remove('dark');
-  } else {
-    document.documentElement.setAttribute('data-theme', theme);
-  }
+  document.documentElement.setAttribute('data-theme', theme);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -587,28 +582,28 @@ function switchDrawMode(mode) {
   if (mode === 'free') {
     currentDrawMode = 'free';
     isEditMode = false;
-    freeDrawBtn.style.background = '#2563eb';
-    shapeDrawBtn.style.background = '#9ca3af';
+    if (freeDrawBtn) freeDrawBtn.style.background = '#2563eb';
+    if (shapeDrawBtn) shapeDrawBtn.style.background = '#9ca3af';
     if (editBtn) editBtn.style.background = '#9ca3af';
-    shapePanel.style.display = 'none';
-    shapeManipulator.disable();
+    if (shapePanel) shapePanel.style.display = 'none';
+    shapeManipulator.deactivate();
     routeEditor.disable();
   } else if (mode === 'shape') {
     currentDrawMode = 'shape';
     isEditMode = false;
-    shapeDrawBtn.style.background = '#2563eb';
-    freeDrawBtn.style.background = '#9ca3af';
+    if (shapeDrawBtn) shapeDrawBtn.style.background = '#2563eb';
+    if (freeDrawBtn) freeDrawBtn.style.background = '#9ca3af';
     if (editBtn) editBtn.style.background = '#9ca3af';
-    shapePanel.style.display = 'block';
+    if (shapePanel) shapePanel.style.display = 'block';
     routeEditor.disable();
   } else if (mode === 'edit') {
     currentDrawMode = 'free';
     isEditMode = true;
     if (editBtn) editBtn.style.background = '#2563eb';
-    freeDrawBtn.style.background = '#9ca3af';
-    shapeDrawBtn.style.background = '#9ca3af';
-    shapePanel.style.display = 'none';
-    shapeManipulator.disable();
+    if (freeDrawBtn) freeDrawBtn.style.background = '#9ca3af';
+    if (shapeDrawBtn) shapeDrawBtn.style.background = '#9ca3af';
+    if (shapePanel) shapePanel.style.display = 'none';
+    shapeManipulator.deactivate();
     routeEditor.enable();
   }
 }
@@ -627,11 +622,12 @@ document.getElementById('shapeDrawMode')?.addEventListener('click', () => {
   }
   switchDrawMode('shape');
 });
-document.getElementById('editModeBtn')?.addEventListener('click', () => {
+document.getElementById('editModeBtn')?.addEventListener('click', (e) => {
+  const btn = e.currentTarget;
   if (isEditMode) {
     routeEditor.disable();
     isEditMode = false;
-    document.getElementById('editModeBtn').style.background = '#9ca3af';
+    btn.style.background = '#9ca3af';
     updateMessage('已退出编辑模式');
   } else {
     switchDrawMode('edit');
@@ -949,8 +945,8 @@ const shapeManipulator = new ShapeManipulator();
 document.getElementById('generateShapeBtn')?.addEventListener('click', () => {
   const rawCenter = map.getCenter();
   const center = CoordManager.parseMapClick(rawCenter.lat, rawCenter.lng);
-  const shapeType = document.getElementById('shapeType').value;
-  const rotation = parseInt(document.getElementById('rotationInput').value) || 0;
+  const shapeType = document.getElementById('shapeType')?.value || '400m';
+  const rotation = parseInt(rotationInput?.value) || 0;
   const offsetLat = parseFloat(document.getElementById('offsetLatInput')?.value) || 0;
   const offsetLng = parseFloat(document.getElementById('offsetLngInput')?.value) || 0;
   
@@ -986,24 +982,16 @@ class RouteEditor {
   renderMarkers() {
     this.clearMarkers();
     routePoints.forEach((point, index) => {
-      // 将 WGS84 点转换为当前地图坐标系显示
       const displayLatLng = CoordManager.toMapDisplay(point);
-      const marker = L.circleMarker(displayLatLng, {
-        radius: 6,
-        color: '#2563eb',
-        fillColor: '#2563eb',
-        fillOpacity: 0.8,
-        weight: 2
+      const marker = L.marker(displayLatLng, {
+        draggable: true,
+        zIndexOffset: 10000
       }).addTo(map);
-
-      marker.dragging.enable();
 
       marker.on('drag', () => {
         const newLatLng = marker.getLatLng();
-        // 将拖拽后的地图坐标转换为 WGS84 保存
         const wgsPoint = CoordManager.toWGS84Point(newLatLng.lng, newLatLng.lat);
         routePoints[index] = wgsPoint;
-        // 刷新轨迹线显示
         const displayPoints = CoordManager.toMapDisplayArray(routePoints);
         if (polyline) polyline.setLatLngs(displayPoints);
         updateDistanceInfo();
@@ -1011,6 +999,7 @@ class RouteEditor {
 
       marker.on('dragend', () => {
         pushHistory();
+        updateRouteHash();
       });
 
       this.markers.push(marker);
@@ -1028,11 +1017,93 @@ class RouteEditor {
 
 const routeEditor = new RouteEditor();
 
-// ==================== 路线平滑模块 ====================
+// ==================== 路线平滑模块（优化版）====================
 
-function smoothRoute(points, tolerance = 0.00005) {
+function geoChord(p1, p2) {
+  const o = (p1.lat + p2.lat) * Math.PI / 360;
+  const l = (p2.lng - p1.lng) * Math.cos(o);
+  const c = p2.lat - p1.lat;
+  return Math.sqrt(l * l + c * c) || 1e-12;
+}
+
+function lerpByT(p1, p2, t1, t2, t) {
+  const s = t2 - t1;
+  if (Math.abs(s) < 1e-12) return { lat: p1.lat, lng: p1.lng };
+  const r = (t - t1) / s;
+  return {
+    lat: p1.lat + (p2.lat - p1.lat) * r,
+    lng: p1.lng + (p2.lng - p1.lng) * r
+  };
+}
+
+function crPointCentripetal(p0, p1, p2, p3, t, alpha = 0.5) {
+  const d0 = Math.pow(geoChord(p0, p1), alpha);
+  const d1 = Math.pow(geoChord(p1, p2), alpha);
+  const d2 = Math.pow(geoChord(p2, p3), alpha);
+
+  const t0 = 0;
+  const t1 = t0 + d0;
+  const t2 = t1 + d1;
+  const t3 = t2 + d2;
+
+  const tt = t1 + (t2 - t1) * t;
+
+  const a1 = lerpByT(p0, p1, t0, t1, tt);
+  const a2 = lerpByT(p1, p2, t1, t2, tt);
+  const a3 = lerpByT(p2, p3, t2, t3, tt);
+
+  const b1 = lerpByT(a1, a2, t0, t2, tt);
+  const b2 = lerpByT(a2, a3, t1, t3, tt);
+
+  return lerpByT(b1, b2, t1, t2, tt);
+}
+
+function smoothRouteCatmullRom(points, isLooped = false, density = 9) {
+  if (!points || points.length < 2) return points;
+  const pts = points.map(p => ({ lat: p.lat, lng: p.lng }));
+  if (pts.length < 3) return pts;
+
+  let controlPoints;
+  if (isLooped && pts.length >= 3) {
+    controlPoints = [pts[pts.length - 1], ...pts, pts[0], pts[1]];
+  } else {
+    controlPoints = [pts[0], ...pts, pts[pts.length - 1]];
+  }
+
+  const result = [];
+  const segmentCount = isLooped ? pts.length : pts.length - 1;
+
+  for (let i = 0; i < segmentCount; i++) {
+    const p1 = pts[i];
+    const p2 = pts[(i + 1) % pts.length];
+
+    const distance = haversineDistance(p1.lat, p1.lng, p2.lat, p2.lng);
+    const numPoints = Math.max(8, Math.min(40, Math.round(distance / Math.max(1.2, 30 / density))));
+
+    const cpIndex = i + 1;
+    const p0 = controlPoints[cpIndex - 1];
+    const cp1 = controlPoints[cpIndex];
+    const cp2 = controlPoints[cpIndex + 1];
+    const p3 = controlPoints[cpIndex + 2];
+
+    for (let j = 0; j < numPoints; j++) {
+      const t = j / numPoints;
+      result.push(crPointCentripetal(p0, cp1, cp2, p3, t));
+    }
+  }
+
+  if (isLooped) {
+    result.push({ lat: pts[0].lat, lng: pts[0].lng });
+  } else {
+    result.push({ lat: pts[pts.length - 1].lat, lng: pts[pts.length - 1].lng });
+  }
+
+  return result;
+}
+
+function simplifyRoute(points, tolerance = 0.00001) {
   if (!points || points.length < 3) return points;
-  
+
   const perpendicularDistance = (p, p1, p2) => {
     const dx = p2.lng - p1.lng;
     const dy = p2.lat - p1.lat;
@@ -1042,18 +1113,18 @@ function smoothRoute(points, tolerance = 0.00005) {
     const nearY = p1.lat + t * dy;
     return Math.sqrt((p.lng - nearX) ** 2 + (p.lat - nearY) ** 2);
   };
-  
+
   const DouglasPeucker = (pts, tol) => {
     if (pts.length <= 2) return pts;
     let maxDist = 0, maxIndex = 0;
     const end = pts.length - 1;
     const p1 = pts[0], p2 = pts[end];
-    
+
     for (let i = 1; i < end; i++) {
       const dist = perpendicularDistance(pts[i], p1, p2);
       if (dist > maxDist) { maxDist = dist; maxIndex = i; }
     }
-    
+
     if (maxDist > tol) {
       const left = DouglasPeucker(pts.slice(0, maxIndex + 1), tol);
       const right = DouglasPeucker(pts.slice(maxIndex), tol);
@@ -1061,8 +1132,12 @@ function smoothRoute(points, tolerance = 0.00005) {
     }
     return [p1, p2];
   };
-  
+
   return DouglasPeucker([...points], tolerance);
+}
+
+function getActivePoints() {
+  return smoothedPoints && smoothedPoints.length > 0 ? smoothedPoints : routePoints;
 }
 
 function applySmoothing() {
@@ -1070,24 +1145,43 @@ function applySmoothing() {
     updateMessage('轨迹点太少，无需平滑', true);
     return;
   }
-  
-  pushHistory();
-  const smoothed = smoothRoute(routePoints, 0.00005);
-  
-  if (smoothed.length < 3) {
-    updateMessage('平滑后轨迹点太少', true);
+
+  if (smoothedPoints && smoothedPoints.length > 0) {
+    smoothedPoints = null;
+    if (smoothPolyline) {
+      map.removeLayer(smoothPolyline);
+      smoothPolyline = null;
+    }
+    const displayPoints = CoordManager.toMapDisplayArray(routePoints);
+    if (polyline) polyline.setLatLngs(displayPoints);
+    updateMessage('已取消平滑预览');
+    updateDistanceInfo();
     return;
   }
-  
-  routePoints = smoothed;
-  const displayPoints = CoordManager.toMapDisplayArray(routePoints);
-  if (polyline) polyline.setLatLngs(displayPoints);
-  if (routeEditor.active) routeEditor.renderMarkers();
-  
-  updateMessage(`轨迹已平滑，现有 ${routePoints.length} 个点`);
+
+  const simplified = simplifyRoute(routePoints, 0.000005);
+  smoothedPoints = smoothRouteCatmullRom(simplified, false, 9);
+
+  if (smoothedPoints.length < 3) {
+    updateMessage('平滑后轨迹点太少', true);
+    smoothedPoints = null;
+    return;
+  }
+
+  const displayPoints = CoordManager.toMapDisplayArray(smoothedPoints);
+  if (smoothPolyline) {
+    smoothPolyline.setLatLngs(displayPoints);
+  } else {
+    smoothPolyline = L.polyline(displayPoints, {
+      color: '#3b82f6',
+      weight: 3,
+      opacity: 0.7,
+      dashArray: '8, 4'
+    }).addTo(map);
+  }
+
+  updateMessage(`平滑预览：${routePoints.length} 控制点 → ${smoothedPoints.length} 平滑点（再次点击取消）`);
   updateDistanceInfo();
-  updateRouteStatus();
-  updateRouteHash();
 }
 
 // ==================== 操作历史记录模块 ====================
@@ -1108,9 +1202,14 @@ function undo() {
   }
   
   routePoints = JSON.parse(historyStack.pop());
+  smoothedPoints = null;
+  if (smoothPolyline) { map.removeLayer(smoothPolyline); smoothPolyline = null; }
   
   if (polyline) {
     map.removeLayer(polyline);
+    const displayPoints = CoordManager.toMapDisplayArray(routePoints);
+    polyline = L.polyline(displayPoints, { color: "#ff5722" }).addTo(map);
+  } else if (routePoints.length >= 2) {
     const displayPoints = CoordManager.toMapDisplayArray(routePoints);
     polyline = L.polyline(displayPoints, { color: "#ff5722" }).addTo(map);
   }
@@ -1153,6 +1252,8 @@ function loadRoute(routeName) {
   pushHistory();
   // 保存的路径点是 WGS84 格式
   routePoints = routes[routeName].points;
+  smoothedPoints = null;
+  if (smoothPolyline) { map.removeLayer(smoothPolyline); smoothPolyline = null; }
 
   if (polyline) map.removeLayer(polyline);
   // 将 WGS84 点转换为当前地图坐标系显示
@@ -1230,6 +1331,8 @@ updateSavedRoutesList();
 
 let routePoints = [];
 let polyline = null;
+let smoothedPoints = null;
+let smoothPolyline = null;
 let paceChart = null;
 let hrChart = null;
 let previewData = null;
@@ -1261,11 +1364,26 @@ function computeDistanceMeters(points) {
   return total;
 }
 
+function fitText(el) {
+  const maxWidth = (el.parentElement ? el.parentElement.clientWidth - 24 : 260) || 200;
+  const curSize = parseFloat(getComputedStyle(el).fontSize) || 22;
+  if (maxWidth <= 16) return;
+  const testSize = curSize;
+  el.style.fontSize = testSize + 'px';
+  if (el.scrollWidth > maxWidth) {
+    const ratio = Math.min(0.92, (maxWidth / el.scrollWidth) * 0.92);
+    el.style.fontSize = Math.max(9, Math.round(testSize * ratio)) + 'px';
+  } else {
+    el.style.fontSize = '';
+  }
+}
+
 function updateDistanceInfo() {
   const el = document.getElementById("distanceInfo");
   if (!el) return;
   if (!routePoints || routePoints.length < 2) {
     el.textContent = "总距离约：0 公里";
+    fitText(el);
     return;
   }
   const baseMeters = computeDistanceMeters(routePoints);
@@ -1273,9 +1391,18 @@ function updateDistanceInfo() {
   const lapInput = document.getElementById("lapCount");
   const laps = Math.max(1, parseFloat(lapInput?.value) || 1);
   const totalKm = baseKm * laps;
+
+  let smoothInfo = '';
+  if (smoothedPoints && smoothedPoints.length > 0) {
+    const smoothMeters = computeDistanceMeters(smoothedPoints);
+    const smoothKm = smoothMeters / 1000;
+    smoothInfo = ` | 平滑：${smoothKm.toFixed(2)} km`;
+  }
+
   el.textContent = laps > 1
-    ? `总距离约：${totalKm.toFixed(2)} 公里（基础：${baseKm.toFixed(2)} km × ${laps} 圈）`
-    : `总距离约：${baseKm.toFixed(2)} 公里`;
+    ? `总距离约：${totalKm.toFixed(2)} 公里（基础：${baseKm.toFixed(2)} km × ${laps} 圈）${smoothInfo}`
+    : `总距离约：${baseKm.toFixed(2)} 公里${smoothInfo}`;
+  fitText(el);
 }
 
 map.on("click", (e) => {
@@ -1295,18 +1422,8 @@ map.on("click", (e) => {
   const wgsPoint = CoordManager.parseMapClick(e.latlng.lat, e.latlng.lng);
   routePoints.push(wgsPoint);
 
-  // 将 WGS84 轨迹点转换为当前地图坐标系显示
-  const displayPoints = CoordManager.toMapDisplayArray(routePoints);
-  if (polyline) {
-    polyline.setLatLngs(displayPoints);
-  } else {
-    polyline = L.polyline(displayPoints, { color: "#ff5722" }).addTo(map);
-  }
-
+  updateRouteDisplay();
   updateMessage(`已添加点数：${routePoints.length}`);
-  updateDistanceInfo();
-  updateRouteStatus();
-  updateRouteHash();
 });
 
 function updateRouteStatus() {
@@ -1333,11 +1450,12 @@ function undoLastPoint() {
     routePoints.pop();
     if (polyline) {
       if (routePoints.length < 2) { map.removeLayer(polyline); polyline = null; }
-      else polyline.setLatLngs(routePoints);
+      else polyline.setLatLngs(CoordManager.toMapDisplayArray(routePoints));
     }
     updateMessage(`已撤销最后一个点，当前 ${routePoints.length} 个点`);
     updateDistanceInfo();
     updateRouteStatus();
+    updateRouteHash();
   }
 }
 
@@ -1345,12 +1463,26 @@ function clearRoute() {
   if (routePoints.length === 0) return;
   if (!confirm('确定要清空当前路线吗？')) return;
   pushHistory();
+  smoothedPoints = null;
+  if (smoothPolyline) { map.removeLayer(smoothPolyline); smoothPolyline = null; }
   routePoints = [];
   if (polyline) { map.removeLayer(polyline); polyline = null; }
   shapeManipulator.deactivate();
   routeEditor.disable();
   historyStack = [];
   updateMessage("轨迹已清空");
+  updateDistanceInfo();
+  updateRouteStatus();
+  updateRouteHash();
+}
+
+function updateRouteDisplay() {
+  const displayPoints = CoordManager.toMapDisplayArray(routePoints);
+  if (polyline) {
+    polyline.setLatLngs(displayPoints);
+  } else {
+    polyline = L.polyline(displayPoints, { color: "#ff5722" }).addTo(map);
+  }
   updateDistanceInfo();
   updateRouteStatus();
   updateRouteHash();
@@ -1364,18 +1496,13 @@ function closeRoute() {
   if (d < 10) { updateMessage('路线已经闭合'); return; }
   pushHistory();
   routePoints.push({ lat: first.lat, lng: first.lng });
-  const displayPoints = CoordManager.toMapDisplayArray(routePoints);
-  if (polyline) polyline.setLatLngs(displayPoints);
   updateMessage('路线已闭合');
-  updateDistanceInfo();
-  updateRouteStatus();
-  updateRouteHash();
+  updateRouteDisplay();
 }
 
 function encodePolylineValue(v) {
-  v = Math.round(v * 1e6);
-  v = v << 1;
-  if (v < 0) v = ~v;
+  if (v < 0) { v = ~(v << 1); }
+  else { v = v << 1; }
   let result = '';
   while (v >= 0x20) {
     result += String.fromCharCode((0x20 | (v & 0x1f)) + 63);
@@ -1448,6 +1575,8 @@ function loadRouteFromHash() {
     }
     if (Array.isArray(points) && points.length >= 2) {
       routePoints = points;
+      smoothedPoints = null;
+      if (smoothPolyline) { map.removeLayer(smoothPolyline); smoothPolyline = null; }
       const displayPoints = CoordManager.toMapDisplayArray(routePoints);
       if (polyline) polyline.setLatLngs(displayPoints);
       else polyline = L.polyline(displayPoints, { color: "#ff5722" }).addTo(map);
@@ -1462,9 +1591,10 @@ function loadRouteFromHash() {
 let isGenerating = false;
 
 function exportGPX() {
-  if (routePoints.length < 2) { updateMessage('请先绘制路线', true); return; }
+  const points = getActivePoints();
+  if (points.length < 2) { updateMessage('请先绘制路线', true); return; }
   let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1">\n  <trk><name>FitTool Route</name><trkseg>\n';
-  for (const p of routePoints) {
+  for (const p of points) {
     xml += `    <trkpt lat="${p.lat}" lon="${p.lng}"></trkpt>\n`;
   }
   xml += '  </trkseg></trk>\n</gpx>';
@@ -1499,6 +1629,8 @@ function importGPX(file) {
       if (points.length < 2) { updateMessage(`GPX 文件有效轨迹点不足（${points.length}）`, true); return; }
       pushHistory();
       routePoints = points;
+      smoothedPoints = null;
+      if (smoothPolyline) { map.removeLayer(smoothPolyline); smoothPolyline = null; }
       const displayPoints = CoordManager.toMapDisplayArray(routePoints);
       if (polyline) polyline.setLatLngs(displayPoints);
       else polyline = L.polyline(displayPoints, { color: "#ff5722" }).addTo(map);
@@ -1531,7 +1663,8 @@ function calculateLapsByDistance() {
   }
   
   const requiredLaps = targetDistance / baseKm;
-  document.getElementById('lapCount').value = requiredLaps.toFixed(2);
+  const lapEl = document.getElementById('lapCount');
+  if (lapEl) lapEl.value = requiredLaps.toFixed(2);
   
   updateMessage(`按目标距离 ${targetDistance} 公里计算，需要 ${requiredLaps.toFixed(2)} 圈`);
   updateDistanceInfo();
@@ -1624,6 +1757,7 @@ async function generateFit() {
   let successCount = 0;
   let failCount = 0;
   let lastError = '';
+  const fitBlobs = [];
   
   try {
     for (let i = 0; i < exportCount; i++) {
@@ -1662,7 +1796,7 @@ async function generateFit() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             startTime,
-            points: routePoints,
+            points: getActivePoints(),
             paceSecondsPerKm: filePaceSecondsPerKm,
             hrRest, hrMax, lapCount, variantIndex: i + 1,
             weightKg, powerFactor, gpsDrift, avgCadence,
@@ -1678,18 +1812,40 @@ async function generateFit() {
         }
         
         const blob = await res.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = exportCount > 1 ? `run_${i + 1}.fit` : "run.fit";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(url);
+        fitBlobs.push({ blob, name: `run_${i + 1}.fit` });
         successCount++;
       } catch (e) {
         failCount++;
         lastError = `第 ${i + 1} 份请求异常: ${e.message}`;
+      }
+    }
+    
+    const zipPack = document.getElementById('zipPackCheck')?.checked;
+    if (fitBlobs.length > 1 && zipPack && typeof JSZip !== 'undefined') {
+      updateGeneratingModal('正在打包 ZIP 文件...');
+      const zip = new JSZip();
+      for (const { blob, name } of fitBlobs) {
+        zip.file(name, blob);
+      }
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const url = window.URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'routes.zip';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } else {
+      for (const { blob, name } of fitBlobs) {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
       }
     }
     
@@ -1700,7 +1856,7 @@ async function generateFit() {
     updateGeneratingModal(
       summary,
       failCount === 0
-        ? `请前往「Keep App → 我的 → 我的数据 → 运动数据同步 → 运动数据文件导入」选择文件上传<br><br>点击左上角图标可赞赏支持开源项目 😊`
+        ? `请前往「Keep App → 我的 → 我的数据 → 运动数据同步 → 运动数据文件导入」选择文件上传<br><br>点击左上角图标可赞赏支持开源项目`
         : lastError
     );
     updateMessage(summary);
@@ -1729,6 +1885,75 @@ rebuildExportTimes();
 loadRouteFromHash();
 
 // ==================== 运动预览功能模块 ====================
+
+function renderPreviewStats(preview) {
+  const samples = preview.samples || [];
+  const n = samples.length;
+  if (!n) return;
+
+  const totalDist = preview.totalDistanceMeters || 0;
+  const totalSec = preview.totalDurationSec || 0;
+  const calories = preview.calories || 0;
+
+  let sumHr = 0, sumCadence = 0, sumPower = 0;
+  let sumGround = 0, sumFlight = 0, sumVert = 0, sumSpeed = 0;
+  let hrCount = 0, cadCount = 0, powerCount = 0;
+  let groundCount = 0, flightCount = 0, vertCount = 0;
+
+  for (const s of samples) {
+    if (s.heartRate) { sumHr += s.heartRate; hrCount++; }
+    if (s.cadence) { sumCadence += s.cadence; cadCount++; }
+    if (s.power) { sumPower += s.power; powerCount++; }
+    if (s.groundTime) { sumGround += s.groundTime; groundCount++; }
+    if (s.flightTime) { sumFlight += s.flightTime; flightCount++; }
+    if (s.verticalOscillation) { sumVert += s.verticalOscillation; vertCount++; }
+    if (s.speed) sumSpeed += s.speed;
+  }
+
+  const avgSpeed = sumSpeed / n;
+  const avgPaceSecPerKm = avgSpeed > 0 ? 1000 / avgSpeed : 0;
+  const paceMin = Math.floor(avgPaceSecPerKm / 60);
+  const paceSec = Math.round(avgPaceSecPerKm % 60);
+
+  const avgHr = hrCount ? Math.round(sumHr / hrCount) : 0;
+  const avgCadence = cadCount ? Math.round(sumCadence / cadCount) : 0;
+  const avgPower = powerCount ? Math.round(sumPower / powerCount) : 0;
+
+  const avgGround = groundCount ? Math.round(sumGround / groundCount) : 0;
+  const avgFlight = flightCount ? Math.round(sumFlight / flightCount) : 0;
+  const avgVertMm = vertCount ? (sumVert / vertCount) : 0;
+  const avgVertCm = (avgVertMm / 10).toFixed(1);
+
+  const avgStride = (avgCadence > 0 && avgSpeed > 0)
+    ? ((avgSpeed * 60) / avgCadence).toFixed(2) : '-';
+
+  const durationMin = Math.floor(totalSec / 60);
+  const durationSec = Math.round(totalSec % 60);
+  const distKm = (totalDist / 1000).toFixed(2);
+
+  const load = avgHr ? Math.round(totalSec * (avgHr / 200) * 0.1) : 0;
+
+  const setText = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val;
+  };
+
+  setText('statDistance', `${distKm} km`);
+  setText('statDuration', `${durationMin}:${durationSec.toString().padStart(2, '0')}`);
+  setText('statPace', `${paceMin}'${paceSec.toString().padStart(2, '0')}"`);
+  setText('statCalories', `${calories} kcal`);
+  setText('statHr', avgHr ? `${avgHr} bpm` : '—');
+  setText('statCadence', avgCadence ? `${avgCadence} spm` : '—');
+  setText('statPower', avgPower ? `${avgPower} W` : '—');
+  setText('statStride', avgStride !== '-' ? `${avgStride} m` : '—');
+  setText('statGroundTime', avgGround ? `${avgGround} ms` : '—');
+  setText('statFlightTime', avgFlight ? `${avgFlight} ms` : '—');
+  setText('statVertOsc', avgVertMm ? `${avgVertCm} cm` : '—');
+  setText('statLoad', load ? `${load}` : '—');
+
+  const statsEl = document.getElementById('previewStats');
+  if (statsEl) statsEl.style.display = 'block';
+}
 
 function renderPreviewCharts(preview) {
   if (!preview || !Array.isArray(preview.samples) || preview.samples.length === 0) {
@@ -1771,6 +1996,8 @@ function renderPreviewCharts(preview) {
       scales: { x: { title: { display: true, text: "时间 (分钟)" } }, y: { title: { display: true, text: "bpm" } } }
     }
   });
+
+  renderPreviewStats(preview);
 }
 
 async function previewActivity() {
@@ -1819,6 +2046,10 @@ async function previewActivity() {
   const powerFactor = parseFloat(document.getElementById("powerFactor")?.value) || 1.3;
   const gpsDrift = parseFloat(document.getElementById("gpsDrift")?.value) || 0;
   const avgCadence = parseInt(document.getElementById("avgCadence")?.value) || 170;
+  const includeHeartRate = document.getElementById("includeHeartRate")?.checked ?? true;
+  const includePower = document.getElementById("includePower")?.checked ?? true;
+  const includeCadence = document.getElementById("includeCadence")?.checked ?? true;
+  const includeGaitData = document.getElementById("includeGaitData")?.checked ?? true;
   
   isGenerating = true;
   document.getElementById("generateFit").disabled = true;
@@ -1834,7 +2065,8 @@ async function previewActivity() {
         startTime,
         points: routePoints,
         paceSecondsPerKm, hrRest, hrMax, lapCount,
-        weightKg, powerFactor, gpsDrift, avgCadence
+        weightKg, powerFactor, gpsDrift, avgCadence,
+        includeHeartRate, includePower, includeCadence, includeGaitData
       })
     });
     
@@ -1983,6 +2215,11 @@ document.getElementById('serviceStatus')?.addEventListener('click', (e) => {
 
 document.addEventListener('DOMContentLoaded', () => {
   checkServiceStatus();
+});
+
+window.addEventListener('resize', () => {
+  const el = document.getElementById("distanceInfo");
+  if (el) fitText(el);
 });
 
 // ==================== 预览回放功能模块 ====================

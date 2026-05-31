@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { processRouteRequest, generateFitFile, RequestBody } from './lib';
+import { processRouteRequest, generateFitFile, applySensorOptions, RequestBody } from './lib';
 import { rateLimit, getRateLimitStats } from './middleware/rate-limit';
 import { version } from '../package.json';
 
@@ -68,10 +68,17 @@ app.post('/api/preview', async (c) => {
     const result = processRouteRequest(body || {});
     if ('error' in result) return c.json({ error: result.error }, 400);
 
+    const samples = applySensorOptions(result.samples, {
+      includeHeartRate: body.includeHeartRate,
+      includePower: body.includePower,
+      includeCadence: body.includeCadence,
+      includeGaitData: body.includeGaitData,
+    });
+
     return c.json({
       totalDistanceMeters: result.totalDist,
       totalDurationSec: result.totalDurationSec,
-      samples: result.samples,
+      samples,
       calories: result.calories,
     });
   } catch (e) {
