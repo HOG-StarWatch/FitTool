@@ -47,12 +47,18 @@ window.App = {
     U.$("#brand").addEventListener("click", () => this.openSupport());
     U.$("#support-close").addEventListener("click", () => this.closeSupport());
     U.$("#support-overlay").addEventListener("click", (e) => { if (e.target === U.$("#support-overlay")) this.closeSupport(); });
-    document.addEventListener("keydown", (e) => { if (e.key === "Escape") this.closeSupport(); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") { this.closeSupport(); Retime.close(); } });
     U.$("#btn-open").addEventListener("click", () => silent.click());
     U.$("#btn-export-csv").addEventListener("click", () => Exporters.csvAll());
     U.$("#btn-export-gpx").addEventListener("click", () => Exporters.gpx());
     U.$("#btn-export-tcx").addEventListener("click", () => Exporters.tcx());
     U.$("#btn-export-json").addEventListener("click", () => Exporters.json());
+    U.$("#btn-save-fit").addEventListener("click", () => this.saveFit());
+    U.$("#btn-retime").addEventListener("click", () => Retime.open());
+    U.$("#retime-close").addEventListener("click", () => Retime.close());
+    U.$("#retime-cancel").addEventListener("click", () => Retime.close());
+    U.$("#retime-apply").addEventListener("click", () => Retime.apply());
+    U.$("#retime-overlay").addEventListener("click", (e) => { if (e.target === U.$("#retime-overlay")) Retime.close(); });
     U.$("#btn-repair").addEventListener("click", () => Repair.run());
 
     U.$$(".tab").forEach((t) => t.addEventListener("click", () => this.switchTab(t.dataset.tab)));
@@ -120,6 +126,22 @@ window.App = {
     if (label) U.toast(`该文件由 ${label} 生成`, 4000);
   },
 
+  saveFit() {
+    const st = FFV.state;
+    if (!this._loaded || !st.messages) {
+      U.toast("请先打开一个 FIT 文件。", 3000);
+      return;
+    }
+    const result = Encode.buildFit(st.messages);
+    const base = (st.fileName || "activity").replace(/\.fit$/i, "");
+    const outName = `${base}_edited.fit`;
+    U.download(result.bytes, outName, "application/octet-stream");
+    st.dirty = false;
+    Views.syncEditUI();
+    const skipNote = result.skip ? `，跳过 ${result.skip} 条（${[...result.skipped].join(", ") || "无"}）` : "";
+    U.toast(`已保存 ${outName}：写入 ${result.ok} 条消息${skipNote}`, 6000);
+  },
+
   async decode(bytes, name, size) {
     const status = U.$("#file-status");
     U.$("#workbench").hidden = false;
@@ -145,6 +167,10 @@ window.App = {
     state.sessions = [];
     state.deviceInfo = [];
     state.elapsedMs = [];
+    state.editing = false;
+    state.dirty = false;
+    Views.syncEditUI();
+    Retime.close();
 
     MapView.dispose();
 
@@ -258,6 +284,9 @@ window.App = {
 
   reset() {
     this._loaded = false;
+    FFV.state.editing = false;
+    FFV.state.dirty = false;
+    Views.syncEditUI();
     U.$("#landing").hidden = false;
     U.$("#workbench").hidden = true;
     U.$("#topbar-actions").hidden = true;

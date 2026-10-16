@@ -5,6 +5,14 @@ window.Views = {
     U.$("#btn-expand-all").onclick = () => this.setAll(true);
     U.$("#btn-collapse-all").onclick = () => this.setAll(false);
     U.$("#btn-export-all-csv").onclick = () => Exporters.csvAll();
+    this._editBtn = U.$("#btn-edit-mode");
+    if (this._editBtn) {
+      this._editBtn.onclick = () => this.toggleEditMode();
+    }
+    const tablesCtn = U.$("#message-tables");
+    if (tablesCtn) {
+      tablesCtn.addEventListener("click", (e) => this._onCellClick(e));
+    }
   },
 
   setAll(open) {
@@ -179,6 +187,99 @@ window.Views = {
     return `<table class="grid"><thead><tr>${headers.map((c) => `<th>${U.escapeHtml(c)}</th>`).join("")}</tr></thead><tbody>${rows.map((r) => `<tr>${headers.map((c) => `<td>${U.escapeHtml(U.fmtValue(r[c]))}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
   },
 
+  editGrid(rows, cols, name) {
+    if (!rows.length) return "<p>无消息</p>";
+    const editing = FFV.state.editing === true;
+    const headers = cols.filter((c) => rows.some((r) => r[c] !== undefined && r[c] !== null && r[c] !== ""));
+    const nameAttr = U.escapeHtml(name);
+    const body = rows.map((r) => {
+      const idx = r._editIdx;
+      const cells = headers.map((c) => {
+        const v = r[c];
+        const editable = editing
+          && v !== undefined && v !== null && v !== ""
+          && (typeof v === "number" || typeof v === "string" || typeof v === "boolean" || v instanceof Date);
+        const attrs = editable ? ` class="edit-cell" data-name="${nameAttr}" data-field="${U.escapeHtml(c)}" data-idx="${idx}"` : "";
+        return `<td${attrs}>${U.escapeHtml(U.fmtValue(v))}</td>`;
+      }).join("");
+      return `<tr>${cells}</tr>`;
+    }).join("");
+    return `<table class="grid"><thead><tr>${headers.map((c) => `<th>${U.escapeHtml(c)}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table>`;
+  },
+
+  toggleEditMode() {
+    if (!FFV.state.messages) {
+      U.toast("请先打开一个 FIT 文件。", 3000);
+      return;
+    }
+    FFV.state.editing = !FFV.state.editing;
+    this.syncEditUI();
+    this.refreshTables();
+    U.toast(FFV.state.editing ? "编辑模式已开启：点击表格中的单元格即可修改数值。" : "编辑模式已关闭。", 3000);
+  },
+
+  syncEditUI() {
+    const editBtn = U.$("#btn-edit-mode");
+    if (editBtn) {
+      editBtn.classList.toggle("active", FFV.state.editing === true);
+      editBtn.textContent = FFV.state.editing ? "编辑中…" : "编辑";
+    }
+    const saveBtn = U.$("#btn-save-fit");
+    if (saveBtn) saveBtn.textContent = FFV.state.dirty ? "保存 FIT *" : "保存 FIT";
+  },
+
+  _onCellClick(e) {
+    if (!FFV.state.editing) return;
+    const td = e.target.closest("td.edit-cell");
+    if (!td) return;
+    if (td.querySelector("input")) return;
+    this.beginEditCell(td);
+  },
+
+  beginEditCell(td) {
+    const name = td.dataset.name;
+    const idx = Number(td.dataset.idx);
+    const field = td.dataset.field;
+    const list = FFV.state.messages && FFV.state.messages[name];
+    if (!list || !list[idx]) return;
+    const msg = list[idx];
+    const original = msg[field];
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "cell-input";
+    input.value = U.inputString(original);
+    td.textContent = "";
+    td.appendChild(input);
+    input.focus();
+    if (input.select) input.select();
+
+    let done = false;
+    const commit = () => {
+      if (done) return;
+      done = true;
+      const parsed = U.parseEditedValue(original, input.value);
+      const same = original instanceof Date
+        ? (parsed instanceof Date && parsed.getTime() === original.getTime())
+        : (parsed === original);
+      if (!same) U.setMsgField(name, idx, field, parsed);
+      td.textContent = U.fmtValue(msg[field]);
+      this.syncEditUI();
+      if (FFV.state.dirty) this.renderOverview();
+    };
+    const cancel = () => {
+      if (done) return;
+      done = true;
+      td.textContent = U.fmtValue(original);
+    };
+
+    input.addEventListener("blur", commit);
+    input.addEventListener("keydown", (e2) => {
+      if (e2.key === "Enter") { e2.preventDefault(); input.blur(); }
+      else if (e2.key === "Escape") { e2.preventDefault(); cancel(); }
+    });
+  },
+
   displayName(key) {
     return key.replace(/Mesgs$/, "");
   },
@@ -214,12 +315,50 @@ window.Views = {
     });
   },
 
+  /* 数据被批量改写（如「调整时间/配速」）后重绘表格，保留展开状态与排序 */
+  refreshTables() {
+    if (!FFV.state.messages) return;
+    const container = U.$("#message-tables");
+    if (!container || !container.children.length) return;
+
+    const expanded = new Set();
+    U.$$(".mtable.open .mtable-body").forEach((b) => expanded.add(b.dataset.name));
+    const sortSnapshot = { ...this._sort };
+    const sortCol = {};
+    for (const k of Object.keys(sortSnapshot)) {
+      const i = k.indexOf("|");
+      if (i > 0) sortCol[k.slice(0, i)] = k.slice(i + 1);
+    }
+
+    this.renderTables();
+    this._sort = sortSnapshot;
+
+    U.$$(".mtable").forEach((el) => {
+      const body = el.querySelector(".mtable-body");
+      if (!body) return;
+      const name = body.dataset.name;
+      const col = sortCol[name];
+      if (col) {
+        const dir = sortSnapshot[name + "|" + col];
+        this.fillGrid(body, name, col);
+        body.querySelectorAll("thead th").forEach((th) => {
+          if (th.textContent === col) th.className = dir === "asc" ? "sorted-asc" : "sorted-desc";
+        });
+      }
+      if (expanded.has(name)) {
+        el.classList.add("open");
+        const t = el.querySelector(".mt-toggle");
+        if (t) t.textContent = "收起";
+      }
+    });
+  },
+
   fillGrid(body, name, sortKey) {
     const list = FFV.state.messages[name];
     const cols = [];
     for (const m of list) for (const k of Object.keys(m)) if (!cols.includes(k)) cols.push(k);
     const key = `${name}`;
-    let rows = list.map((m) => ({ ...m }));
+    let rows = list.map((m, i) => ({ ...m, _editIdx: i }));
     if (sortKey) {
       const dir = this._sort[key + "|" + sortKey];
       rows.sort((a, b) => {
@@ -233,7 +372,7 @@ window.Views = {
         return dir === "desc" ? -1 : 1;
       });
     }
-    body.innerHTML = this.grid(rows, cols);
+    body.innerHTML = this.editGrid(rows, cols, name);
     body.querySelectorAll("thead th").forEach((th, i) => {
       th.onclick = () => {
         const col = cols[i];

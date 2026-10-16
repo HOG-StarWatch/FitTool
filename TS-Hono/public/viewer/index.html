@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>FIT 文件查看器 &ndash; 浏览、导出与修复运动 FIT 文件</title>
-  <meta name="description" content="在浏览器中查看、分析、导出与修复运动 FIT 文件——支持数据表格、交互图表与地图，全程本地处理，不上传任何文件。" />
+  <title>FIT 文件查看器 &ndash; 浏览、导出、编辑与修复运动 FIT 文件</title>
+  <meta name="description" content="在浏览器中查看、分析、编辑、导出与修复运动 FIT 文件——支持数据表格、交互图表与地图，全程本地处理，不上传任何文件。" />
   <link rel="icon" href="../HOG_S_64.png" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="../theme.css" />
@@ -17,7 +17,7 @@
       <img class="logo" src="../HOG_S_64.png" alt="FIT 文件查看器" />
       <div class="brand-text">
         <h1>FIT 文件查看器</h1>
-        <p>浏览、导出与修复运动 FIT 文件</p>
+        <p>浏览、导出、编辑与修复运动 FIT 文件</p>
       </div>
     </div>
 
@@ -35,6 +35,8 @@
         <button class="btn" id="btn-export-tcx">导出 TCX</button>
         <button class="btn" id="btn-export-json">导出 JSON</button>
       </div>
+      <button class="btn btn-primary" id="btn-save-fit">保存 FIT</button>
+      <button class="btn" id="btn-retime" title="直接修改运动起始时间与配速，自动重算每个记录点的时间">调整时间/配速</button>
       <button class="btn btn-primary" id="btn-repair">修复文件</button>
     </div>
   </header>
@@ -51,13 +53,14 @@
         <h2>将 <code>.fit</code> 文件拖放到这里</h2>
         <p>或 <span class="link" id="browse-link">点击选择文件</span> &ndash; 所有处理均在浏览器本地完成，不会上传任何数据</p>
         <input type="file" id="file-input" accept=".fit,application/octet-stream" hidden />
-        <p class="dz-hint">支持表格查看、交互图表与地图展示 &ndash; 可导出 CSV / GPX / TCX / JSON &ndash; 还可修复损坏的文件。</p>
+        <p class="dz-hint">支持表格查看、交互图表与地图展示 &ndash; 可导出 CSV / GPX / TCX / JSON &ndash; 还可编辑数值并保存、修复损坏的文件。</p>
       </div>
       <div class="landing-foot">
         <div class="feature"><b>表格</b> 每种消息类型均可排序、可导出为 CSV</div>
         <div class="feature"><b>图表</b> 心率、功率、踏频、速度、海拔 &ndash; 支持悬停与缩放</div>
         <div class="feature"><b>地图</b> GPS 轨迹与圈速标记，可导出为 GPX</div>
         <div class="feature"><b>修复</b> 从损坏文件中恢复数据，下载修复后的副本</div>
+        <div class="feature"><b>编辑</b> 在表格中直接修改字段数值，重新保存为 FIT 文件</div>
       </div>
     </section>
 
@@ -95,6 +98,7 @@
           <button class="btn" id="btn-expand-all">全部展开</button>
           <button class="btn" id="btn-collapse-all">全部折叠</button>
           <button class="btn" id="btn-export-all-csv">全部导出为 CSV</button>
+          <button class="btn" id="btn-edit-mode">编辑</button>
           <span class="tables-count" id="tables-count"></span>
         </div>
         <div id="message-tables"></div>
@@ -176,6 +180,38 @@
     </div>
   </div>
 
+  <!-- 调整起始时间与配速 -->
+  <div class="overlay" id="retime-overlay" hidden>
+    <div class="support-modal retime-modal" role="dialog" aria-modal="true" aria-label="调整起始时间与配速">
+      <div class="support-header">
+        <h3>调整起始时间与配速</h3>
+        <button class="support-close" id="retime-close" title="关闭" aria-label="关闭">×</button>
+      </div>
+      <div class="support-body">
+        <div class="retime-row">
+          <label for="retime-start">开始时间</label>
+          <input type="datetime-local" id="retime-start" />
+        </div>
+        <div class="retime-row">
+          <label for="retime-pace-min">目标配速</label>
+          <span class="retime-pace">
+            <input type="number" id="retime-pace-min" min="0" step="1" value="5" />
+            <span>分</span>
+            <input type="number" id="retime-pace-sec" min="0" max="59.9" step="1" value="0" />
+            <span>秒/km</span>
+          </span>
+        </div>
+        <p class="retime-hint">
+          将按新配速重算每个记录点的时间戳与速度，并同步会话、圈速与文件头时间。距离与轨迹保持不变。
+        </p>
+        <div class="retime-actions">
+          <button class="btn" id="retime-cancel">取消</button>
+          <button class="btn btn-primary" id="retime-apply">应用并重算</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="js/sdk/fitsdk.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
@@ -183,6 +219,8 @@
   <script src="js/common.js"></script>
   <script src="js/coords.js"></script>
   <script src="js/exporters.js"></script>
+  <script src="js/encode.js"></script>
+  <script src="js/retime.js"></script>
   <script src="js/repair.js"></script>
   <script src="js/views.js"></script>
   <script src="js/charts.js"></script>

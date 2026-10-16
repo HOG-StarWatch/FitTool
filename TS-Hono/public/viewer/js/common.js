@@ -15,6 +15,8 @@ window.FFV = {
     deviceInfo: [],
     isValidFit: false,
     sourceLabel: null,
+    editing: false,
+    dirty: false,
   },
 };
 
@@ -126,5 +128,46 @@ const U = {
     t.classList.add("show");
     clearTimeout(U.toast._timer);
     U.toast._timer = setTimeout(() => t.classList.remove("show"), ms || 3000);
+  },
+
+  inputString(value) {
+    if (value instanceof Date) {
+      const p = (n) => String(n).padStart(2, "0");
+      return `${value.getFullYear()}-${p(value.getMonth() + 1)}-${p(value.getDate())} ${p(value.getHours())}:${p(value.getMinutes())}:${p(value.getSeconds())}`;
+    }
+    if (typeof value === "number") return String(value);
+    if (value === null || value === undefined) return "";
+    return String(value);
+  },
+
+  parseEditedValue(original, raw) {
+    const t = String(raw == null ? "" : raw).trim();
+    if (original instanceof Date) {
+      let d = new Date(t);
+      if (isNaN(d.getTime()) && t.indexOf(" ") > 0) d = new Date(t.replace(" ", "T"));
+      return isNaN(d.getTime()) ? original : d;
+    }
+    if (typeof original === "number") {
+      if (t === "") return original;
+      const n = Number(t);
+      if (!Number.isFinite(n)) return original;
+      return Number.isInteger(original) ? Math.round(n) : n;
+    }
+    if (typeof original === "boolean") {
+      if (/^(true|1|y|yes|是|on)$/i.test(t)) return true;
+      if (/^(false|0|n|no|否|off)$/i.test(t)) return false;
+      return original;
+    }
+    return t;
+  },
+
+  setMsgField(name, index, field, value) {
+    const messages = FFV.state.messages;
+    if (!messages) return false;
+    const list = messages[name] || messages[name + "Mesgs"];
+    if (!list || !list[index]) return false;
+    list[index][field] = value;
+    FFV.state.dirty = true;
+    return true;
   },
 };
