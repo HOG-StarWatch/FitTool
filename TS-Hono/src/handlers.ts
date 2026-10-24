@@ -55,7 +55,7 @@ export async function handlePreview(body: RequestBody): Promise<Response> {
     const result = processRouteRequest(body || {});
     if ('error' in result) return jsonResponse({ error: result.error }, 400);
 
-    const flags = deriveAltitudeFlags(body?.altitudes, body?.points?.length || 0, body?.points?.length || 0);
+    const flags = deriveAltitudeFlags(body?.altitudes, body?.points?.length || 0);
     const elevation = buildElevationInfo(body, flags);
     const sensorOptions = resolveSensorOptions(body, elevation);
     const samples = applySensorOptions(result.samples, sensorOptions);
@@ -95,7 +95,7 @@ export async function handleGenerate(body: RequestBody): Promise<Response> {
     }
     if ('error' in result) return jsonResponse({ error: result.error }, 400);
 
-    const flags = deriveAltitudeFlags(body?.altitudes, body?.points?.length || 0, body?.points?.length || 0);
+    const flags = deriveAltitudeFlags(body?.altitudes, body?.points?.length || 0);
     const elevation = buildElevationInfo(body, flags);
     const sensorOptions = resolveSensorOptions(body, elevation);
     const format: ExportFormat = isExportFormat(body?.format) ? body.format : 'fit';

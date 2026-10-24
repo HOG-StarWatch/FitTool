@@ -3,8 +3,7 @@ import type { RecordData } from './fit';
 import { resolveDevice } from './device';
 import { downloadResponse } from './http';
 import {
-  buildClosedBasePoints,
-  hasAutoClosure,
+  isClosedRoute,
   offsetPointMeters,
   haversineDistance,
   deriveAltitudeFlags,
@@ -722,7 +721,7 @@ export function buildSyntheticProcessedRoute(body: RequestBody): { error: string
   }
 
   const stats = computeSampleStats(snap.samples, parsed.hrRestVal, parsed.hrMaxVal, snap.totalDurationSec);
-  const altitudeFlags = deriveAltitudeFlags(body?.altitudes, pointCheck.points.length, pointCheck.points.length);
+  const altitudeFlags = deriveAltitudeFlags(body?.altitudes, pointCheck.points.length);
   return buildProcessedRoute(parsed, {
     totalDist: snap.totalDistanceMeters,
     totalDurationSec: snap.totalDurationSec,
@@ -741,28 +740,28 @@ export function processRouteRequest(body: RequestBody): { error: string } | Proc
 
   const pointCheck = validateRoutePoints(points);
   if ('error' in pointCheck) return pointCheck;
+  // 以前端点位为准：不补闭合点、不裁剪，环线由前端「闭合」按钮决定
   const validPoints = pointCheck.points;
 
   const parsed = parseRequestParams(body);
   if ('error' in parsed) return parsed;
 
-  const basePoints = buildClosedBasePoints(validPoints);
-  const altitudeFlags = deriveAltitudeFlags(bodyAltitudes, validPoints.length, basePoints.length);
+  const altitudeFlags = deriveAltitudeFlags(bodyAltitudes, validPoints.length);
   const usedLaps = parsed.laps > 0 ? parsed.laps : 1;
   const shouldApplyDrift = parsed.drift > 0;
   const fullLaps = Math.floor(usedLaps);
   const partialLap = usedLaps - fullLaps;
 
-  const expandedPointCount = Math.ceil(basePoints.length * fullLaps) + Math.floor(basePoints.length * partialLap);
+  const expandedPointCount = Math.ceil(validPoints.length * fullLaps) + Math.floor(validPoints.length * partialLap);
   if (expandedPointCount > MAX_EXPANDED_POINTS) {
     return { error: `展开后的轨迹点数量超过上限 (${MAX_EXPANDED_POINTS})，请减少圈数或轨迹点` };
   }
 
   const allPoints: RoutePoint[] = [];
   const expandedAltitudes: Array<number | null> | null = altitudeFlags.baseAltitudes ? [] : null;
-  const lastIndex = basePoints.length - 1;
-  const autoClosure = hasAutoClosure(basePoints);
-  const isClosureIdx = (j: number) => autoClosure && (j === 0 || j === lastIndex);
+  const lastIndex = validPoints.length - 1;
+  const closedRoute = isClosedRoute(validPoints);
+  const isClosureIdx = (j: number) => closedRoute && (j === 0 || j === lastIndex);
 
   const pushLap = (count: number) => {
     let offsetLatMeters = 0;
@@ -773,15 +772,15 @@ export function processRouteRequest(body: RequestBody): { error: string } | Proc
       offsetLonMeters = parsed.drift * Math.sin(angle);
     }
     for (let j = 0; j < count; j++) {
-      const p = basePoints[j];
+      const p = validPoints[j];
       const applyDrift = shouldApplyDrift && !isClosureIdx(j);
       allPoints.push(applyDrift ? offsetPointMeters(p, offsetLatMeters, offsetLonMeters) : p);
       if (expandedAltitudes) expandedAltitudes.push(altitudeFlags.baseAltitudes![j]);
     }
   };
 
-  for (let i = 0; i < fullLaps; i++) pushLap(basePoints.length);
-  if (partialLap > 0) pushLap(Math.floor(basePoints.length * partialLap));
+  for (let i = 0; i < fullLaps; i++) pushLap(validPoints.length);
+  if (partialLap > 0) pushLap(Math.floor(validPoints.length * partialLap));
 
   if (allPoints.length < 2) {
     return { error: '圈数过小导致展开后轨迹点不足，请增加圈数或轨迹点' };

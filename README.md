@@ -45,7 +45,7 @@ FitTool 是一款基于 Web 的校园跑路线生成工具，支持在地图上�
 - **坐标系统转换**：自动处理 GCJ-02、BD-09、WGS-84 坐标系统
 - **URL 路线分享**：路线编码到 URL hash，支持一键分享（Polyline 算法压缩）
 - **GPX 导入/导出**：支持 GPX 文件格式的路线导入和导出
-- **路线自动闭合**：一键闭合首尾点形成环线
+- **路线闭合（前端控制）**：一键闭合首尾点形成环线；未闭合时按开放路线原样生成，服务端不自动补点
 
 ## 版本选择
 
@@ -388,14 +388,14 @@ TS-Hono/
 | `points` | 是 | 轨迹点（2~10000 个），纬度 -90~90，经度 -180~180 |
 | `paceSecondsPerKm` | 否 | 目标配速（秒/公里），默认 360；健走默认 720。有效值 1~1999，超出回退默认 |
 | `hrRest` / `hrMax` | 否 | 静息/最大心率，默认 60 / 180；`hrRest` clamp 到 30~120，`hrMax` clamp 到 100~220 |
-| `lapCount` | 否 | 圈数（支持小数），默认 1，路线自动闭合；展开后的轨迹点上限 50000，超限返回 400 |
+| `lapCount` | 否 | 圈数（支持小数），默认 1；按前端点位原样展开（服务端不自动补闭合点）；展开后的轨迹点上限 50000，超限返回 400 |
 | `variantIndex` | 否 | 变体序号，默认 1 |
 | `weightKg` | 否 | 体重（30~150kg，含边界），默认 65 |
 | `powerFactor` | 否 | 功率因数，默认 1.3，上限 10（超出 clamp） |
 | `gpsDrift` | 否 | GPS 漂移幅度，后端默认 0（前端界面默认 0.1），钳制到 0~1000 米 |
 | `avgCadence` | 否 | 目标平均步频，默认 170 |
 | `elevationSource` | 否 | 海拔来源：`none` / `off` / `open-elevation` / `opentopodata` / `opentopodata-srtm30m` / `opentopodata-aster30m` / `opentopodata-eudem25m` / `open-meteo` |
-| `altitudes` | 否 | 浏览器端获取的真实海拔数组，长度与 `points` 相同（路线未闭合时也接受 `points.length + 1`）；数组元素可为 `null` 表示该点回退模拟海拔。服务端不再请求任何第三方海拔 API |
+| `altitudes` | 否 | 浏览器端获取的真实海拔数组，长度必须与 `points` 一致（服务端不补点；长度不符视为无效并回退模拟海拔）；数组元素可为 `null` 表示该点回退模拟海拔。服务端不再请求任何第三方海拔 API |
 | `includeHeartRate` / `includePower` / `includeCadence` / `includeGaitData` | 否 | 传感器开关 |
 | `sportType` | 否 | 运动类型：`running`（默认）/ `walking` |
 | `sportName` | 否 | 运动名称（如"跑步"、"户外跑步"），用于预览回显与前端文件名前缀 |

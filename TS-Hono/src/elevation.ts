@@ -32,10 +32,9 @@ export interface AltitudeFlags {
 
 export function deriveAltitudeFlags(
   altitudes: Array<number | null> | null | undefined,
-  inputPointCount: number,
-  basePointCount: number
+  pointCount: number
 ): AltitudeFlags {
-  const base = resolveBaseAltitudes(altitudes, inputPointCount, basePointCount);
+  const base = resolveBaseAltitudes(altitudes, pointCount);
   if (!base) return { used: false, partial: false, baseAltitudes: null, validCount: 0 };
   const validCount = base.filter((v) => v != null && Number.isFinite(v as number)).length;
   return {
@@ -46,37 +45,17 @@ export function deriveAltitudeFlags(
   };
 }
 
+/** 海拔数组必须与前端点数逐一对应：服务端不补点，长度不一致即视为无效 */
 function resolveBaseAltitudes(
   altitudes: Array<number | null> | null | undefined,
-  inputPointCount: number,
-  basePointCount: number
+  pointCount: number
 ): Array<number | null> | null {
-  if (!Array.isArray(altitudes)) return null;
-  let base: Array<number | null>;
-  if (altitudes.length === basePointCount) {
-    base = altitudes;
-  } else if (altitudes.length === inputPointCount && basePointCount === inputPointCount + 1) {
-    // 服务端为闭合路线补了首点，浏览器端海拔也按同样规则补全
-    base = [...altitudes, altitudes[0]];
-  } else {
-    return null;
-  }
-  for (const v of base) {
+  if (!Array.isArray(altitudes) || altitudes.length !== pointCount) return null;
+  for (const v of altitudes) {
     // null 表示该点由 computeSamples 回退模拟海拔
     if (v != null && (typeof v !== 'number' || !Number.isFinite(v))) return null;
   }
-  return base;
-}
-
-/** 轨迹闭合：首尾距离 > 阈值时补回首点 */
-export const ROUTE_CLOSURE_THRESHOLD_METERS = 5;
-
-export function buildClosedBasePoints(points: RoutePoint[] | undefined): RoutePoint[] {
-  if (!points || points.length < 2) return points || [];
-  const first = points[0];
-  const last = points[points.length - 1];
-  const d = haversineDistance(first.lat, first.lng, last.lat, last.lng);
-  return d < ROUTE_CLOSURE_THRESHOLD_METERS ? points : [...points, { lat: first.lat, lng: first.lng }];
+  return altitudes;
 }
 
 const EARTH_RADIUS_M = 6371000;
@@ -100,10 +79,11 @@ export function offsetPointMeters(point: RoutePoint, offsetLatMeters: number, of
   };
 }
 
-export function hasAutoClosure(basePoints: RoutePoint[]): boolean {
-  if (basePoints.length < 2) return false;
-  const first = basePoints[0];
-  const last = basePoints[basePoints.length - 1];
+/** 首尾点完全重合即视为环线（是否闭合由前端决定，服务端不补点） */
+export function isClosedRoute(points: RoutePoint[]): boolean {
+  if (points.length < 2) return false;
+  const first = points[0];
+  const last = points[points.length - 1];
   return last.lat === first.lat && last.lng === first.lng;
 }
 
